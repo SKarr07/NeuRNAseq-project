@@ -1,1 +1,4 @@
-# NeuRNAseq-projectCosas chidas
+# NeuRNAseq-project
+
+m[AS F[ACIL DE EDITAR]]
+MIS CAMBIOS EN rSTUDIO
