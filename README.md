@@ -26,19 +26,30 @@ $ fastq-dump --gzip --skip-technical --dumpbase --split-3 --clip --outdir /mnt/C
 
 #para una lista de SRR pertenecientes a distintos datasets, hicimos lo siguiente:
 
-$nano 1.Preparar una lista con carpetas y sus muestras correspondientes.
+$nano list #1.Preparar una lista con las carpetas SRP y sus muestras correspondientes SRR.sra (1 por línea).
 
-2.Un bash para automatizar el fastqdump.
+#2.Un archivo .sge para automatizar el fastqdump y mediante qsub.
 
+$cat list1 | while read line; do c=$(echo $line|cut -d' ' -f1); m=$(echo $line|cut -d' ' -f2); fastq-dump --gzip --skip-technical --dumpbase --split-3 --clip --outdir /mnt/Citosina/amedina/skarr/neu/monorail/$c $m;done
 
-
-Una vez descargados los SRR, proceder al FastQC.
+Una vez descargados los SRR en sus carpetas correspondientes, proceder al FastQC.
 
 ### 2.FastQC-Trimming-FastQC.
 
-Primeramente organizar las muestras por tipo de librería: SE o PE para un análisis en conjunto.
+Primeramente, organizar las muestras por tipo de librería: SE o PE para un análisis en conjunto.
 
-Para las muestras PE.
+#Hacer una lista con todas las muestras SE y otra con los PE.
+
+$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/*fastq.gz >> newSEfastq.txt
+$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/*fastq.gz >> newPEfastq.txt
+
+$mkdir newSEapr2023 newPEapr2023
+
+$cd newSEapr2023
+$for i in $(cat /mnt/Citosina/amedina/skarr/neu/monorail/newSEfastq.txt); do echo $i; ln -s $i .; done
+
+$cd newPEapr2023
+$for i in $(cat /mnt/Citosina/amedina/skarr/neu/monorail/newPEfastq.txt); do echo $i; ln -s $i .; done
 
 
 
