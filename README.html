@@ -383,7 +383,7 @@ lo siguiente:</p>
 <p>$nano list #1.Preparar una lista con las carpetas SRP y sus muestras
 correspondientes SRR.sra (1 por línea).</p>
 <p>#2.Un archivo .sge para automatizar el fastqdump y mediante qsub.</p>
-<p><span class="math inline">\(cat list1 | while read line; do
+<p><span class="math inline">\(cat list | while read line; do
 c=\)</span>(echo <span class="math inline">\(line|cut -d&#39; &#39;
 -f1); m=\)</span>(echo <span class="math inline">\(line|cut -d&#39;
 &#39; -f2); fastq-dump --gzip --skip-technical --dumpbase --split-3
