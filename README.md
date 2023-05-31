@@ -41,6 +41,7 @@ Primeramente, organizar las muestras por tipo de librería: SE o PE para un aná
 #Hacer una lista con todas las muestras SE y otra con los PE.
 
 $ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/*fastq.gz >> newSEfastq.txt
+
 $ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/*fastq.gz >> newPEfastq.txt
 
 $mkdir newSEapr2023 newPEapr2023
@@ -90,4 +91,33 @@ multiqc ./FastQC_trimmed -o ./FastQC_trimmed
 #Repetir y adaptar para muestras PE.
 
 ### 3.Alignment with STAR y FastQC.
+
+Una vez revisadas las muestras post-trimming con FastQC, proceder al alineamiento.
+
+#para STAR, correr primero el índice, si no se ha hecho antes
+
+STAR --runThreadN 8 \
+--runMode genomeGenerate \
+--genomeDir  /mnt/Citosina/amedina/skarr/neu/monorail/STAR_index \
+--genomeFastaFiles /mnt/Archives/genome/human/GRCh38/ensembl76/chromosomes/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+--sjdbGTFfile /mnt/Archives/genome/human/GRCh38/ensembl76/GTF-file/Homo_sapiens.GRCh38.76.gtf \
+--sjdbOverhang 99
+
+#STAR para SE
+
+$nano star.sh
+
+index=/mnt/Citosina/amedina/skarr/neu/monorail/STAR_index
+FILES=/mnt/Citosina/amedina/skarr/neu/monorail/SRP*/TRIM_results/*.fq.gz
+for f in $FILES
+do
+    echo $f
+    base=$(basename $f .fq.gz)
+    echo $base
+    STAR --runThreadN 20 --genomeDir $index --readFilesIn $f --outSAMtype BAM SortedByCoordinate \
+         --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/STAR_output/$base"_"
+done
+
+#STAR para PE
+
 ### 4.Exportar data para R.

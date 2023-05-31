@@ -398,9 +398,9 @@ proceder al FastQC.</p>
 para un análisis en conjunto.</p>
 <p>#Hacer una lista con todas las muestras SE y otra con los PE.</p>
 <p>$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/</em>fastq.gz
-&gt;&gt; newSEfastq.txt $ls
-/mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/</em>fastq.gz &gt;&gt;
-newPEfastq.txt</p>
+&gt;&gt; newSEfastq.txt</p>
+<p>$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/</em>fastq.gz
+&gt;&gt; newPEfastq.txt</p>
 <p>$mkdir newSEapr2023 newPEapr2023</p>
 <p>$cd newSEapr2023 $for i in $(cat
 /mnt/Citosina/amedina/skarr/neu/monorail/newSEfastq.txt); do echo $i; ln
@@ -433,6 +433,27 @@ LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:22 done</p>
 </div>
 <div id="alignment-with-star-y-fastqc." class="section level3">
 <h3>3.Alignment with STAR y FastQC.</h3>
+<p>Una vez revisadas las muestras post-trimming con FastQC, proceder al
+alineamiento.</p>
+<p>#para STAR, correr primero el índice, si no se ha hecho antes</p>
+<p>STAR –runThreadN 8<br />
+–runMode genomeGenerate<br />
+–genomeDir /mnt/Citosina/amedina/skarr/neu/monorail/STAR_index<br />
+–genomeFastaFiles
+/mnt/Archives/genome/human/GRCh38/ensembl76/chromosomes/Homo_sapiens.GRCh38.dna.primary_assembly.fa<br />
+–sjdbGTFfile
+/mnt/Archives/genome/human/GRCh38/ensembl76/GTF-file/Homo_sapiens.GRCh38.76.gtf<br />
+–sjdbOverhang 99</p>
+<p>#STAR para SE</p>
+<p>$nano star.sh</p>
+<p>index=/mnt/Citosina/amedina/skarr/neu/monorail/STAR_index
+FILES=/mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/TRIM_results/</em>.fq.gz
+for f in $FILES do echo <span class="math inline">\(f  base=\)</span>(basename $f .fq.gz) echo $base
+STAR –runThreadN 20 –genomeDir $index –readFilesIn <span class="math inline">\(f --outSAMtype BAM SortedByCoordinate \
+--quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix
+/mnt/Citosina/amedina/skarr/neu/monorail/SRP*/STAR_output/\)</span>base”_”
+done</p>
+<p>#STAR para PE</p>
 </div>
 <div id="exportar-data-para-r." class="section level3">
 <h3>4.Exportar data para R.</h3>
