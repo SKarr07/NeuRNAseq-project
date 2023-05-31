@@ -360,16 +360,29 @@ pre code {
 
 <div id="neurnaseq-project" class="section level1">
 <h1>NeuRNAseq-project</h1>
+<p>Habiendo seleccionado las muestras bajo los impuestos criterios de
+inclusión, proceder al análisis de los datos de secuenciación.</p>
 <div id="rna-seq-analysis-workflow" class="section level2">
 <h2>RNA-seq analysis workflow</h2>
 <div id="realizar-la-descarga-del-rawdata-fastq." class="section level3">
 <h3>1.Realizar la descarga del rawdata (fastq).</h3>
-<p>a)Existe la opción de descarga de fastq directa del ENA browser
-usando wget.</p>
-<p>b)También está la opción usando el SRAtoolkit.</p>
+<p>a)Existe la opción de descarga de fastqs directamente desde el ENA
+browser usando wget.</p>
+<p>b)O también más agilmente usando la opción del SRAtoolkit.</p>
+<p>$ qlogin $ module load sra/3.0.0</p>
+<p>i.Se puede hacer de manera individual.</p>
+<p>ii.O utilizando una lista con los SRR de las muestras. $ prefetch
+–option-file ID_list_names.txt ## Para una lista con los SRR de interés.
+#una vez terminado el prefetch,</p>
+<p>$ fastq-dump –gzip –skip-technical –dumpbase –split-3 –clip –outdir
+/mnt/Citosina/amedina/skarr/neu/monorail/SRP *.sra</p>
+<p>Una vez descargados los SRR, proceder al FastQC.</p>
 </div>
 <div id="fastqc-trimming-fastqc." class="section level3">
 <h3>2.FastQC-Trimming-FastQC.</h3>
+<p>Primeramente organizar las muestras por tipo de librería: SE o PE
+para un análisis en conjunto.</p>
+<p>Para las muestras PE.</p>
 </div>
 <div id="alignment-with-star-y-fastqc." class="section level3">
 <h3>3.Alignment with STAR y FastQC.</h3>
