@@ -408,6 +408,28 @@ newPEfastq.txt</p>
 <p>$cd newPEapr2023 $for i in $(cat
 /mnt/Citosina/amedina/skarr/neu/monorail/newPEfastq.txt); do echo $i; ln
 -s $i .; done</p>
+<p>Una vez teniendo los symlinks podemos trabajar con ellos.</p>
+<p>En este caso, hice un .sh con los 3 pasos de FastQC-Trimming-FastQc
+consecutivos.</p>
+<p>#FastQCTrimmed_wflow.sh</p>
+<p>#!/bin/bash</p>
+<p>USAGE= ./FastQCTrimmed_wflow.sh sed -i ‘s//’
+FastQCTrimmed_wflow.sh</p>
+<p>AUTHOR: Saul Karr (adaptado de Eve Coss)</p>
+<p>###a partir de #
+/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023</p>
+<p>PARTE 1.- FastQC y multiQC fastqc ./*.fastq.gz -o ./newFQCout multiqc
+./newFQCout -o ./newFQCout</p>
+<p>PARTE 2.- Limpieza de adaptadores # single-end cd newSEapr2023 for i
+in *.fastq.gz; do echo trimmomatic SE -threads 8 -phred33 <span class="math inline">\(i
+data_trimmed/&quot;\)</span>{i%.fastq}_trimmed.fastq.gz”
+ILLUMINACLIP:/mnt/Citosina/amedina/skarr/neu/monorail/TruSeq3-SE.fa:2:30:10
+LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:22 done</p>
+<p>PARTE 3.- FastQC y multiQC cd newSEapr2023 fastqc
+./data_trimmed/*.fastq.gz -o ./FastQC_trimmed # Reporte en MultiQC
+multiqc ./FastQC_trimmed -o ./FastQC_trimmed</p>
+<p>#Finalmente crear un .sge para enviar por qsub.</p>
+<p>#Repetir y adaptar para muestras PE.</p>
 </div>
 <div id="alignment-with-star-y-fastqc." class="section level3">
 <h3>3.Alignment with STAR y FastQC.</h3>
