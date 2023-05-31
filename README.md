@@ -59,29 +59,30 @@ En este caso, hice un .sh con los 3 pasos de FastQC-Trimming-FastQc consecutivos
 
 #!/bin/bash
 
-USAGE= ./FastQCTrimmed_wflow.sh
+#USAGE= ./FastQCTrimmed_wflow.sh
 sed -i 's/\r//' FastQCTrimmed_wflow.sh
 
-AUTHOR: Saul Karr (adaptado de Eve Coss)
+#AUTHOR: Saul Karr (adaptado de Eve Coss)
 
 ###a partir de # /mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023
 
-PARTE 1.- FastQC y multiQC
+#PARTE 1.- FastQC y multiQC
 fastqc ./*.fastq.gz -o ./newFQCout
 multiqc ./newFQCout -o ./newFQCout
 
-PARTE 2.- Limpieza de adaptadores
-# single-end
+#PARTE 2.- Limpieza de adaptadores
+#single-end
 cd newSEapr2023
 for i in *.fastq.gz;
 do echo
 trimmomatic SE -threads 8 -phred33 $i data_trimmed/"${i%.fastq}_trimmed.fastq.gz" ILLUMINACLIP:/mnt/Citosina/amedina/skarr/neu/monorail/TruSeq3-SE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:22
 done
 
-PARTE 3.- FastQC y multiQC
+#PARTE 3.- FastQC y multiQC
 cd newSEapr2023
 fastqc ./data_trimmed/*.fastq.gz -o ./FastQC_trimmed
-# Reporte en MultiQC
+
+#Reporte en MultiQC
 multiqc ./FastQC_trimmed -o ./FastQC_trimmed
 
 #Finalmente crear un .sge para enviar por qsub.
