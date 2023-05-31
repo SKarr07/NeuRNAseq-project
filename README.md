@@ -11,15 +11,26 @@ a)Existe la opción de descarga de fastqs directamente desde el ENA browser usan
 b)O también más agilmente usando la opción del SRAtoolkit.
 
 $ qlogin
+
 $ module load sra/3.0.0
 
 i.Se puede hacer de manera individual.
 
 ii.O utilizando una lista con los SRR de las muestras.
+
 $ prefetch --option-file ID_list_names.txt		## Para una lista con los SRR de interés.
+
 #una vez terminado el prefetch,
 
 $ fastq-dump --gzip --skip-technical --dumpbase --split-3 --clip --outdir /mnt/Citosina/amedina/skarr/neu/monorail/SRP *.sra
+
+#para una lista de SRR pertenecientes a distintos datasets, hicimos lo siguiente:
+
+$nano 1.Preparar una lista con carpetas y sus muestras correspondientes.
+
+2.Un bash para automatizar el fastqdump.
+
+
 
 Una vez descargados los SRR, proceder al FastQC.
 

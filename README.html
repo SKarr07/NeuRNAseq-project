@@ -369,13 +369,20 @@ inclusión, proceder al análisis de los datos de secuenciación.</p>
 <p>a)Existe la opción de descarga de fastqs directamente desde el ENA
 browser usando wget.</p>
 <p>b)O también más agilmente usando la opción del SRAtoolkit.</p>
-<p>$ qlogin $ module load sra/3.0.0</p>
+<p>$ qlogin</p>
+<p>$ module load sra/3.0.0</p>
 <p>i.Se puede hacer de manera individual.</p>
-<p>ii.O utilizando una lista con los SRR de las muestras. $ prefetch
-–option-file ID_list_names.txt ## Para una lista con los SRR de interés.
-#una vez terminado el prefetch,</p>
+<p>ii.O utilizando una lista con los SRR de las muestras.</p>
+<p>$ prefetch –option-file ID_list_names.txt ## Para una lista con los
+SRR de interés.</p>
+<p>#una vez terminado el prefetch,</p>
 <p>$ fastq-dump –gzip –skip-technical –dumpbase –split-3 –clip –outdir
 /mnt/Citosina/amedina/skarr/neu/monorail/SRP *.sra</p>
+<p>#para una lista de SRR pertenecientes a distintos datasets, hicimos
+lo siguiente:</p>
+<p>$nano 1.Preparar una lista con carpetas y sus muestras
+correspondientes.</p>
+<p>2.Un bash para automatizar el fastqdump.</p>
 <p>Una vez descargados los SRR, proceder al FastQC.</p>
 </div>
 <div id="fastqc-trimming-fastqc." class="section level3">
