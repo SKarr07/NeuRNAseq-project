@@ -87,6 +87,8 @@ fastqc ./data_trimmed/*.fastq.gz -o ./FastQC_trimmed
 multiqc ./FastQC_trimmed -o ./FastQC_trimmed
 
 #Finalmente crear un .sge para enviar por qsub.
+SI se va a enviar por qsub, cuidar de pedir los nucleos adecuados:
+#$ -pe openmp 8 #para trimmomatic SE -threads 8
 
 #Repetir y adaptar para muestras PE.
 
@@ -108,16 +110,21 @@ STAR --runThreadN 8 \
 $nano star.sh
 
 index=/mnt/Citosina/amedina/skarr/neu/monorail/STAR_index
-FILES=/mnt/Citosina/amedina/skarr/neu/monorail/SRP*/TRIM_results/*.fq.gz
+FILES=/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/data_trimmed/*.fastq.gz
 for f in $FILES
 do
     echo $f
-    base=$(basename $f .fq.gz)
+    base=$(basename $f .fastq.gz)
     echo $base
     STAR --runThreadN 20 --genomeDir $index --readFilesIn $f --outSAMtype BAM SortedByCoordinate \
-         --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix /mnt/Citosina/amedina/skarr/neu/monorail/SRP*/STAR_output/$base"_"
+         --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix /mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/STAR_output/$base"_"
 done
 
+SI se va a enviar por qsub, cuidar de pedir los nucleos adecuados:
+#$ -pe openmp 20 #para STAR --runThreadN 20
+
 #STAR para PE
+
+
 
 ### 4.Exportar data para R.

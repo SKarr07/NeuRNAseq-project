@@ -428,7 +428,9 @@ LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:22 done</p>
 <p>#PARTE 3.- FastQC y multiQC cd newSEapr2023 fastqc
 ./data_trimmed/*.fastq.gz -o ./FastQC_trimmed</p>
 <p>#Reporte en MultiQC multiqc ./FastQC_trimmed -o ./FastQC_trimmed</p>
-<p>#Finalmente crear un .sge para enviar por qsub.</p>
+<p>#Finalmente crear un .sge para enviar por qsub. SI se va a enviar por
+qsub, cuidar de pedir los nucleos adecuados: #$ -pe openmp 8 #para
+trimmomatic SE -threads 8</p>
 <p>#Repetir y adaptar para muestras PE.</p>
 </div>
 <div id="alignment-with-star-y-fastqc." class="section level3">
@@ -447,12 +449,14 @@ alineamiento.</p>
 <p>#STAR para SE</p>
 <p>$nano star.sh</p>
 <p>index=/mnt/Citosina/amedina/skarr/neu/monorail/STAR_index
-FILES=/mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/TRIM_results/</em>.fq.gz
-for f in $FILES do echo <span class="math inline">\(f  base=\)</span>(basename $f .fq.gz) echo $base
-STAR –runThreadN 20 –genomeDir $index –readFilesIn <span class="math inline">\(f --outSAMtype BAM SortedByCoordinate \
+FILES=/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/data_trimmed/*.fastq.gz
+for f in $FILES do echo <span class="math inline">\(f  base=\)</span>(basename $f .fastq.gz) echo
+$base STAR –runThreadN 20 –genomeDir $index –readFilesIn <span class="math inline">\(f --outSAMtype BAM SortedByCoordinate \
 --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix
-/mnt/Citosina/amedina/skarr/neu/monorail/SRP*/STAR_output/\)</span>base”_”
+/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/STAR_output/\)</span>base”_”
 done</p>
+<p>SI se va a enviar por qsub, cuidar de pedir los nucleos adecuados: #$
+-pe openmp 20 #para STAR –runThreadN 20</p>
 <p>#STAR para PE</p>
 </div>
 <div id="exportar-data-para-r." class="section level3">
