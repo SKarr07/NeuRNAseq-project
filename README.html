@@ -473,16 +473,13 @@ echo $base STAR –runThreadN 20 –genomeDir $index –readFilesIn <span class=
 –quantMode GeneCounts –readFilesCommand zcat –outFileNamePrefix
 /mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEapr2023/STAR_output/$base”</em>”
 done</p>
-</div>
-</div>
-</div>
-<div id="parte-5.--fastqc-y-multiqc" class="section level1">
-<h1>PARTE 5.- FastQC y multiQC</h1>
-<p>cd newPEapr2023 fastqc ./STAR_output/*.out.bam -o ./BamQC # Reporte
-en MultiQC multiqc ./BamQC -o ./BamQC</p>
+<p>#PARTE 5.- FastQC y multiQC cd newPEapr2023 fastqc
+./STAR_output/*.out.bam -o ./BamQC</p>
+<p>#Reporte en MultiQC multiqc ./BamQC -o ./BamQC</p>
 <p>Se verificaron aquellos archivos en /BamQC correspondientes a
 muestras con conflictos post-trimming p.ej. contenido de adaptadores y
 secuencias sobrerrepresentadas.</p>
+</div>
 <div id="exportar-data-para-r." class="section level3">
 <h3>4.Exportar data para R.</h3>
 <p>Junté todos los ReadsPerGene.out.tab de distintos destinos usando $ln
@@ -495,25 +492,18 @@ read.table(file=files[i], sep=“, header=F, as.is=T) counts &lt;-
 cbind(counts, x[,2]) } head(counts) tail(counts) dim(counts)
 class(counts) class(x) # the original count tab file from star counts
 &lt;- as.data.frame(counts)</p>
-</div>
-</div>
-<div id="assigning-the-rows-a-name-the-id" class="section level1">
-<h1>Assigning the rows a name (the ID)</h1>
-<p>rownames(counts) &lt;- x[,1] colnames(counts)</p>
+<p>#Assigning the rows a name (the ID) rownames(counts) &lt;- x[,1]
+colnames(counts)</p>
 <p>#solo para eliminar alguna muestra, indicar el numero de columna al
 que pertenece counts &lt;- counts[,-c(3,5)]</p>
-</div>
-<div id="assinging-the-columns-a-name" class="section level1">
-<h1>Assinging the columns a name</h1>
-</div>
-<div id="set-the-column-names" class="section level1">
-<h1>set the column names</h1>
-<p>colnames(counts) &lt;- sub(“_ReadsPerGene.out.tab”, ““, files)
-colnames(counts)</p>
+<p>#Assinging the columns a name #set the column names colnames(counts)
+&lt;- sub(“_ReadsPerGene.out.tab”, ““, files) colnames(counts)</p>
 <p>#o en su defecto colnames(counts) &lt;-
 sub(“.fastq.gz_trimmed_ReadsPerGene.out.tab”, ““, files) colnames
 (counts) # saving the counts save(counts, file
 =”/mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/SRP</em>-counts.RData”)</p>
+</div>
+</div>
 </div>
 
 

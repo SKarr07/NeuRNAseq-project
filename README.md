@@ -140,10 +140,11 @@ do
          --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix /mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEapr2023/STAR_output/$base"_"
 done
 
-# PARTE 5.- FastQC y multiQC
+#PARTE 5.- FastQC y multiQC
 cd newPEapr2023
 fastqc ./STAR_output/*.out.bam -o ./BamQC
-# Reporte en MultiQC
+
+#Reporte en MultiQC
 multiqc ./BamQC -o ./BamQC
 
 Se verificaron aquellos archivos en /BamQC correspondientes a muestras con conflictos post-trimming p.ej. contenido de adaptadores y secuencias sobrerrepresentadas.
@@ -169,15 +170,15 @@ class(counts)
 class(x) # the original count tab file from star
 counts <- as.data.frame(counts)
 
-# Assigning the rows a name (the ID)
+#Assigning the rows a name (the ID)
 rownames(counts) <- x[,1]
 colnames(counts)
 
 #solo para eliminar alguna muestra, indicar el numero de columna al que pertenece
 counts <- counts[,-c(3,5)]
 
-# Assinging the columns a name
-# set the column names
+#Assinging the columns a name
+#set the column names
 colnames(counts) <- sub("_ReadsPerGene.out.tab", "", files)
 colnames(counts)
 
