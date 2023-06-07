@@ -125,7 +125,64 @@ SI se va a enviar por qsub, hay que solicitar los nucleos adecuados:
 
 #STAR para PE
 
+Creé un .sh para el alineamiento con STAR y el posterior fastqc de los . bam generados.
 
+#PARTE 4.- STAR paired end reads
+
+index=/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/STAR_index
+FILES=/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEapr2023/data_trimmed/*1_trimmed.fastq.gz
+for f in $FILES
+do
+    echo $f
+    base=$(basename $f _1_trimmed.fastq.gz)
+    echo $base
+    STAR --runThreadN 20 --genomeDir $index --readFilesIn $f /mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEapr2023/data_trimmed/$base"_2_trimmed.fastq.gz" --outSAMtype BAM SortedByCoordinate \
+         --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix /mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEapr2023/STAR_output/$base"_"
+done
+
+# PARTE 5.- FastQC y multiQC
+cd newPEapr2023
+fastqc ./STAR_output/*.out.bam -o ./BamQC
+# Reporte en MultiQC
+multiqc ./BamQC -o ./BamQC
+
+Se verificaron aquellos archivos en /BamQC correspondientes a muestras con conflictos post-trimming p.ej. contenido de adaptadores y secuencias sobrerrepresentadas.
 
 
 ### 4.Exportar data para R.
+
+Junté todos los ReadsPerGene.out.tab de distintos destinos usando $ln -s a partir de una lista.
+
+Después en R conectarse a la terminal.
+
+setwd("/mnt/Citosina/amedina/skarr/neu/monorail/SRP114762/STAR_output")
+files <- dir(pattern="ReadsPerGene.out.tab") # count files
+counts <- c()
+for( i in seq_along(files) ){
+  x <- read.table(file=files[i], sep="\t", header=F, as.is=T)
+  counts <- cbind(counts, x[,2])
+}
+head(counts)
+tail(counts)
+dim(counts)
+class(counts)
+class(x) # the original count tab file from star
+counts <- as.data.frame(counts)
+
+# Assigning the rows a name (the ID)
+rownames(counts) <- x[,1]
+colnames(counts)
+
+#solo para eliminar alguna muestra, indicar el numero de columna al que pertenece
+counts <- counts[,-c(3,5)]
+
+# Assinging the columns a name
+# set the column names
+colnames(counts) <- sub("_ReadsPerGene.out.tab", "", files)
+colnames(counts)
+
+#o en su defecto
+colnames(counts) <- sub(".fastq.gz_trimmed_ReadsPerGene.out.tab", "", files)
+colnames (counts)
+# saving the counts
+save(counts, file = "/mnt/Citosina/amedina/skarr/neu/monorail/SRP*/SRP*-counts.RData")
