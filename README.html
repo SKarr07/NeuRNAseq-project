@@ -377,7 +377,7 @@ browser usando wget.</p>
 SRR de interés.</p>
 <p>#una vez terminado el prefetch,</p>
 <p>$ fastq-dump –gzip –skip-technical –dumpbase –split-3 –clip –outdir
-/mnt/Citosina/amedina/skarr/neu/monorail/SRP *.sra</p>
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/SRP *.sra</p>
 <p>#para una lista de SRR pertenecientes a distintos datasets, hicimos
 lo siguiente:</p>
 <p>$nano list #1.Preparar una lista con las carpetas SRP y sus muestras
@@ -387,8 +387,8 @@ correspondientes SRR.sra (1 por línea).</p>
 c=\)</span>(echo <span class="math inline">\(line|cut -d&#39; &#39;
 -f1); m=\)</span>(echo <span class="math inline">\(line|cut -d&#39;
 &#39; -f2); fastq-dump --gzip --skip-technical --dumpbase --split-3
---clip --outdir /mnt/Citosina/amedina/skarr/neu/monorail/\)</span>c
-$m;done</p>
+--clip --outdir
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/\)</span>c $m;done</p>
 <p>Una vez descargados los SRR en sus carpetas correspondientes,
 proceder al FastQC.</p>
 </div>
@@ -397,17 +397,19 @@ proceder al FastQC.</p>
 <p>Primeramente, organizar las muestras por tipo de librería: SE o PE
 para un análisis en conjunto.</p>
 <p>#Hacer una lista con todas las muestras SE y otra con los PE.</p>
-<p>$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/</em>fastq.gz
+<p>$ls
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/SRP<em>/</em>fastq.gz
 &gt;&gt; newSEfastq.txt</p>
-<p>$ls /mnt/Citosina/amedina/skarr/neu/monorail/SRP<em>/</em>fastq.gz
+<p>$ls
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/SRP<em>/</em>fastq.gz
 &gt;&gt; newPEfastq.txt</p>
 <p>$mkdir newSEapr2023 newPEapr2023</p>
 <p>$cd newSEapr2023 $for i in $(cat
-/mnt/Citosina/amedina/skarr/neu/monorail/newSEfastq.txt); do echo $i; ln
--s $i .; done</p>
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newSEfastq.txt); do echo
+$i; ln -s $i .; done</p>
 <p>$cd newPEapr2023 $for i in $(cat
-/mnt/Citosina/amedina/skarr/neu/monorail/newPEfastq.txt); do echo $i; ln
--s $i .; done</p>
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newPEfastq.txt); do echo
+$i; ln -s $i .; done</p>
 <p>Una vez teniendo los symlinks podemos trabajar con ellos.</p>
 <p>En este caso, hice un .sh con los 3 pasos de FastQC-Trimming-FastQc
 consecutivos.</p>
@@ -417,13 +419,13 @@ consecutivos.</p>
 FastQCTrimmed_wflow.sh</p>
 <p>#AUTHOR: Saul Karr (adaptado de Eve Coss)</p>
 <p>###a partir de #
-/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023</p>
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newSEapr2023</p>
 <p>#PARTE 1.- FastQC y multiQC fastqc ./*.fastq.gz -o ./newFQCout
 multiqc ./newFQCout -o ./newFQCout</p>
 <p>#PARTE 2.- Limpieza de adaptadores #single-end cd newSEapr2023 for i
 in *.fastq.gz; do echo trimmomatic SE -threads 8 -phred33 <span class="math inline">\(i
 data_trimmed/&quot;\)</span>{i%.fastq}_trimmed.fastq.gz”
-ILLUMINACLIP:/mnt/Citosina/amedina/skarr/neu/monorail/TruSeq3-SE.fa:2:30:10
+ILLUMINACLIP:/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/TruSeq3-SE.fa:2:30:10
 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:22 done</p>
 <p>#PARTE 3.- FastQC y multiQC cd newSEapr2023 fastqc
 ./data_trimmed/*.fastq.gz -o ./FastQC_trimmed</p>
@@ -440,7 +442,8 @@ alineamiento.</p>
 <p>#para STAR, correr primero el índice, si no se ha hecho antes</p>
 <p>STAR –runThreadN 8<br />
 –runMode genomeGenerate<br />
-–genomeDir /mnt/Citosina/amedina/skarr/neu/monorail/STAR_index<br />
+–genomeDir
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/STAR_index<br />
 –genomeFastaFiles
 /mnt/Archives/genome/human/GRCh38/ensembl76/chromosomes/Homo_sapiens.GRCh38.dna.primary_assembly.fa<br />
 –sjdbGTFfile
@@ -448,15 +451,15 @@ alineamiento.</p>
 –sjdbOverhang 99</p>
 <p>#STAR para SE</p>
 <p>$nano star.sh</p>
-<p>index=/mnt/Citosina/amedina/skarr/neu/monorail/STAR_index
-FILES=/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/data_trimmed/*.fastq.gz
+<p>index=/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/STAR_index
+FILES=/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newSEapr2023/data_trimmed/*.fastq.gz
 for f in $FILES do echo <span class="math inline">\(f  base=\)</span>(basename $f .fastq.gz) echo
 $base STAR –runThreadN 20 –genomeDir $index –readFilesIn <span class="math inline">\(f --outSAMtype BAM SortedByCoordinate \
 --quantMode GeneCounts --readFilesCommand zcat --outFileNamePrefix
-/mnt/Citosina/amedina/skarr/neu/monorail/newSEapr2023/STAR_output/\)</span>base”_”
+/mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/newSEapr2023/STAR_output/\)</span>base”_”
 done</p>
-<p>SI se va a enviar por qsub, cuidar de pedir los nucleos adecuados: #$
--pe openmp 20 #para STAR –runThreadN 20</p>
+<p>SI se va a enviar por qsub, hay que solicitar los nucleos adecuados:
+#$ -pe openmp 20 #para STAR –runThreadN 20</p>
 <p>#STAR para PE</p>
 </div>
 <div id="exportar-data-para-r." class="section level3">
