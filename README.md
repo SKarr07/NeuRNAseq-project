@@ -10,9 +10,11 @@ a)Existe la opción de descarga de fastqs directamente desde el ENA browser usan
 
 b)O también más agilmente usando la opción del SRAtoolkit.
 
+```
 $ qlogin
 
 $ module load sra/3.0.0
+```
 
 i.Se puede hacer de manera individual.
 
