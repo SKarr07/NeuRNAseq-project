@@ -20,12 +20,13 @@ i.Se puede hacer de manera individual.
 
 ii.O utilizando una lista con los SRR de las muestras.
 
+```
 $ prefetch --option-file ID_list_names.txt		## Para una lista con los SRR de interés.
-
+```
 #una vez terminado el prefetch,
-
+```
 $ fastq-dump --gzip --skip-technical --dumpbase --split-3 --clip --outdir /mnt/Citosina/amedina/skarr/neu/GEO_bulkRNAseq/SRP *.sra
-
+```
 #para una `lista` de SRR pertenecientes a distintos datasets, hicimos lo siguiente:
 
 $nano list #1.Preparar una lista con las carpetas SRP y sus muestras correspondientes SRR.sra (1 por línea).
