@@ -1,0 +1,1744 @@
+---
+title: "neubulkRNAnov2023"
+author: "Saul"
+date: "2023-11-29"
+output: html_document
+---
+
+```{r Load modules}
+library(rlang)
+library(DESeq2)
+library(dplyr)
+library(ggplot2)
+library(ggVennDiagram)
+library(tidyverse)
+library(sf)
+library(AnnotationHub)
+library(AnnotationDbi)
+library(dbplyr)
+library(vctrs)
+library(VennDiagram)
+library(pheatmap)
+library(limma)
+library(ggrepel)
+library(EnhancedVolcano)
+library(tidyr)
+library(biomaRt)
+library(org.Hs.eg.db)
+library(tidyverse)
+library(EnsDb.Hsapiens.v86)
+library(topGO)
+library(dplyr)
+library(ComplexHeatmap)
+library(colorRamp2)
+```
+
+```{r 184 spl Matrix configuration}
+setwd("C:/Users/SaulKarr/OneDrive - Instituto Tecnologico y de Estudios Superiores de Monterrey/DBT_data/neubulkRNA")
+
+OctMetadata184 <- read.csv("OctMetadata184.csv")
+#nmfclustering <- read.delim("nmfconsensus.k.4.txt") #volver a correr en cybersort
+
+#carga el archivo de conteos 184spl-counts.RData
+load("C:/Users/SaulKarr/OneDrive - Instituto Tecnologico y de Estudios Superiores de Monterrey/DBT_data/neubulkRNA/184spl-counts.RData")
+
+#cambiar nombre de columna
+OctMetadata184 <- OctMetadata184 %>% rename("P_Method" = "Condition")
+#print(OctMetadata184)
+
+OctMetadata184 <- as.data.frame(OctMetadata184)
+
+OctMetadata184$Age_group <- ifelse(OctMetadata184$Age <= 30, "Y", ifelse(OctMetadata184$Age > 50, "O", "A"))
+OctMetadata184$Age_group <- ifelse(is.na(OctMetadata184$Age_group), "", OctMetadata184$Age_group)
+OctMetadata184$Names <- paste(OctMetadata184$P_Method, OctMetadata184$Sex, OctMetadata184$Age_group, 1:184, sep = "_")
+
+#OctMetadata184 <- as.matrix(OctMetadata184)
+
+rownames(OctMetadata184) <- OctMetadata184$Names
+
+Neu184 <-counts
+
+colnames(Neu184)<- OctMetadata184$Names
+
+all(rownames(OctMetadata184) == colnames(Neu184))
+
+
+# eliminar las primeras 4 filas
+head(Neu184)
+Neu184 <- Neu184[-c(1:4),]
+
+#agregar el no. de cluster del nmf
+#nmfclustering$Names <- nmfclustering$Name
+#OctMetadata184 <- left_join(OctMetadata184,nmfclustering, by="Names")
+
+#cambiar contenido de celdas
+OctMetadata184$P_Method <- ifelse(OctMetadata184$Study == 'SRP051688', 'DBNF', OctMetadata184$P_Method)
+OctMetadata184$P_Method <- ifelse(OctMetadata184$Study == 'SRP226877', 'DF', OctMetadata184$P_Method)
+OctMetadata184$P_Method <- ifelse(OctMetadata184$Study == 'SRP341905', 'DF', OctMetadata184$P_Method)
+
+#class(OctMetadata184$batch)
+#Convertir los valores de las columnas a factores
+OctMetadata184$Beads      <- as.factor(OctMetadata184$Beads)
+OctMetadata184$Density    <- as.factor(OctMetadata184$Density)
+OctMetadata184$FACS       <- as.factor(OctMetadata184$FACS)
+OctMetadata184$X2step     <- as.factor(OctMetadata184$X2step)
+OctMetadata184$Sex        <- as.factor(OctMetadata184$Sex)
+OctMetadata184$Type       <- as.factor(OctMetadata184$Type)
+OctMetadata184$P_Method  <- as.factor(OctMetadata184$P_Method)
+OctMetadata184$Batch      <- as.factor(OctMetadata184$Batch)
+OctMetadata184$Age_group  <- as.factor(OctMetadata184$Age_group)
+#OctMetadata184$Cluster    <- as.factor(OctMetadata184$Cluster)
+
+dds <- DESeqDataSetFromMatrix(countData = Neu184,
+                              colData = OctMetadata184,
+                              design = ~ Type + P_Method)
+
+#test type(SE or PE) as batch in the formula
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,] #add the pval threshold somewhere
+dds <- DESeq(dds)
+dds
+
+#guardar el dds original
+save(dds, file = "dds.RData")
+load("dds.RData")
+
+# A) Plot PCA
+vsd <- vst(dds, blind=FALSE) #normalizacion
+
+#library(limma)
+#plotDensities(assay(vsd), legend=F)
+vsd_mad <- apply(assay(vsd), 1, mad)
+
+#este da una grafica diferente a los siguientes PCA. PCA por topDEGs? No, estos no son DEGs son mad genes.
+plotPCA(vsd[order(vsd_mad, decreasing=T)[1:1500],], intgroup=c("P_Method","Type"))
+plotPCA(vsd[order(vsd_mad, decreasing=T)[1:10000],], intgroup=c("P_Method","Type"))
+
+write.table(assay(vsd),file ="Normalized_counts.tsv")
+
+plotPCA(vsd, intgroup=c("P_Method", "Type"))
+plotPCA(vsd, intgroup=c("Study"))
+plotPCA(vsd, intgroup=c("Study", "P_Method"))
+
+pcaData <- plotPCA(vsd, intgroup=c("Study", "P_Method", "Type"), returnData = TRUE) # vsd and plotPCA are part of DESeq2 package, nothing with my example below. 
+percentVar <- round(100 * attr(pcaData, "percentVar")) 
+ggplot(data=pcaData,aes(x=PC1,y=PC2, shape=factor(Study), col=factor(Study)))+
+ geom_point(alpha = 0.5, size=4, stroke=1.4) +
+ scale_shape_manual(values=c(0:25,0:5))
+
+# BATCH - lo checamos y "no hay batch effect"
+mat <- assay(vsd)
+mm <- model.matrix(~P_Method + Type, colData(vsd))
+mat <- limma::removeBatchEffect(mat, batch=vsd$Type, design=mm)
+assay(vsd) <- mat
+
+pcaData <- plotPCA(vsd, intgroup=c("P_Method", "Type"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=P_Method, shape=Type)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()
+
+#lets get the gene names on the rownames of normalized counts
+
+normcounts <- assay(vsd)
+
+listEnsembl()
+ensembl <- useEnsembl(biomart = "genes")
+datasets <- listDatasets(ensembl)
+ensembl.con <- useMart("ensembl", dataset = 'hsapiens_gene_ensembl')
+attr <- listAttributes(ensembl.con)
+filters <- listFilters(ensembl.con)
+
+geneIDs <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype', 'entrezgene_id'),
+              filters = "ensembl_gene_id",
+              values = rownames(normcounts),
+              mart = ensembl.con)
+
+normcounts_df<- as.data.frame(normcounts)
+normcounts_df<-rownames_to_column(normcounts_df, var="ensembl_gene_id")
+newnormcounts <- left_join(normcounts_df,geneIDs, by="ensembl_gene_id")
+
+save(newnormcounts, file = "newnormcountsGeneIDs.RData")
+#load("C:/Users/SaulKarr/OneDrive - Instituto Tecnologico y de Estudios Superiores de Monterrey/DBT_data/neubulkRNA/newnormcountsGeneIDs.RData")
+
+#drop na
+nncounts <- newnormcounts[(newnormcounts$gene_biotype == "protein_coding"), ]
+nncounts2 <- nncounts %>% drop_na(external_gene_name)
+nncounts3 <- nncounts2[!duplicated(nncounts2$external_gene_name), ]
+rownames(nncounts3) <- nncounts3$external_gene_name
+
+neucounts <- nncounts3[,-c(1,186,187,188)]
+
+dim(neucounts)
+save(neucounts, file= "184neusplGeneIDs.RData")
+
+
+load("184neusplGeneIDs.RData")
+
+write.csv(neucounts,file ="Matriz184splNcounts.csv")
+
+cibersortxResults <- read.csv("CIBERSORTx_Job11.csv")
+```
+
+```{r}
+
+#152 samples filtering after running CIBERSORTX
+#We made a subset of samples with >75% Neutrophil Identity
+cibersortxResults <- read.csv("CIBERSORTx_Job11.csv")
+
+OctMetadata184$Names <- paste(OctMetadata184$P_Method, OctMetadata184$Sex, OctMetadata184$Age_group, 1:184, sep = "_")
+
+Metadata152spl <- left_join(OctMetadata184,cibersortxResults, by="Names")
+
+rownames(Metadata152spl) <- Metadata152spl$Names
+
+Metadata152 <- Metadata152spl %>% drop_na(Identity)
+
+Neu152 <- subset(Neu184, select = c(
+ BN___1   ,   BN___2      ,BN___3      ,BN___4      ,BN___5      ,BN___6      ,BN___7      ,BN___8      ,BN___9     , BN___10    ,
+ BN___12   ,  BN___14   ,  BN___15     ,BN___16     ,BN___17     ,BN___18     ,BN___19     ,BN___20     ,BN___21     ,BN___22    ,
+ BN___23,     BN___24    , BN___25     ,BN___26     ,BN___27     ,BN___28     ,BN___29     ,BN___30     ,BN___31     ,BN___32    ,
+ BN___33 ,    BN_F_O_34   ,BN_M_O_35   ,BN_M_O_36   ,BN___37     ,BN___38     ,BN_F_A_40   ,BN_F_A_41   ,BN_F_O_42   ,BN_F_O_43  ,
+ BN_M_A_44,   BN_M_A_45 ,  BN_F_Y_46   ,BN_F_Y_47   ,BN_M_A_48   ,BN_M_A_49   ,BN___50     ,BN___51     ,BN___52     ,BN___53    ,
+ BN___54,     BN___55    , BN___56     ,D_M_A_62    ,D_M_O_63    ,D_F_A_64    ,D_F_A_66    ,D_M_A_67    ,D___71      ,D___72     ,
+ D___73  ,    D___74    ,  D_M__75     ,D_M__76     ,D_M__77     ,D_M__78     ,D_M__79     ,D_M__80     ,D_M__81     ,D_F__82    ,
+ D___90   ,   D___91     , D___92      ,D___93      ,D___94      ,D___95      ,D___96      ,D___97      ,D_M_Y_98    ,D___101    ,
+ D___102   ,  D___103   ,  D_F_A_104   ,D_M_O_105   ,D_F_Y_106   ,D_M_O_107   ,D_M__108    ,D_M__109    ,D_M__110    ,D_F__111   ,
+ D_M__112,    D_M__113   , D_M__114    ,D_M__115    ,D_M_A_116   ,D_M_O_117   ,D_M_A_118   ,D_M_A_121   ,D_M_Y_122   ,D___126    ,
+ D___128  ,   D___129   ,  D___130     ,D___131     ,D___132     ,D___133     ,D___134     ,D___135     ,D___136     ,D___137    ,
+ D___138   ,  DBN_F_A_139, DBN_F_A_140 ,DBN_F_A_141 ,DBN_F_A_142 ,DBN___143   ,DBN___144   ,DBN___145   ,DBN_F_A_151 ,DBN_M_A_152,
+ DBN_F_Y_153, DBN_M_Y_154 ,DBN_F_Y_155 ,DBN_M_Y_156 ,DBN_M_O_157 ,DBN_F_A_158 ,DBN_M_A_159 ,DBN_M_Y_160 ,DBN_F_A_161 ,DBN_M_A_162,
+ DBN_F_A_163, DBN_F_O_164 ,DBN_M_Y_165, DBN_F_A_166 ,DBN_M_A_167 ,DBN_F_A_168 ,DBP_F__169 , DBP_F__170  ,DBP_M__171  ,DBP_M__172 ,
+ DBP_M__173 , DBP___174  ,DBP___175,  DBP___176    ,DBP___177    ,DBP___178    ,DBP_M_Y_179 , DBP_F_Y_180  ,DBP_F_A_181 ,
+ FACS___182,  FACS___183  ,FACS___184))
+
+colnames(Neu152)
+rownames(Metadata152)
+
+#cambiar nombre de columna
+Neu152 <- Neu152 %>% rename("DBNF___174" = "DBP___174")
+Neu152 <- Neu152 %>% rename("DBNF___175" = "DBP___175")
+Neu152 <- Neu152 %>% rename("DF___176" = "DBP___176")
+Neu152 <- Neu152 %>% rename("DF___177" = "DBP___177")
+Neu152 <- Neu152 %>% rename("DF___178" = "DBP___178")
+Neu152 <- Neu152 %>% rename("DF_M_Y_179" = "DBP_M_Y_179")
+Neu152 <- Neu152 %>% rename("DF_F_Y_180" = "DBP_F_Y_180")
+Neu152 <- Neu152 %>% rename("DF_F_A_181" = "DBP_F_A_181")
+
+#verificar todas las filas en las columnas
+all(rownames(Metadata152) %in% colnames(Neu152))
+
+#estan en orden?
+all(rownames(Metadata152) == colnames(Neu152inc))
+
+#ordenar si no
+Neu152 <- Neu152[, rownames(Metadata152)]
+all(rownames(Metadata152) == colnames(Neu152))
+
+View(Metadata152)
+
+save(Metadata152, file= "Metadata152.RData")
+save(Neu152, file= "Neu152.RData")
+
+# March 18
+#load("Metadata152.RData")
+#load("Neu152.RData")
+
+#Convertir los valores de las columnas a factores
+Metadata152$Beads      <- as.factor(Metadata152$Beads)
+Metadata152$Density    <- as.factor(Metadata152$Density)
+Metadata152$FACS       <- as.factor(Metadata152$FACS)
+Metadata152$X2step     <- as.factor(Metadata152$X2step)
+Metadata152$Sex        <- as.factor(Metadata152$Sex)
+Metadata152$Type       <- as.factor(Metadata152$Type)
+Metadata152$P_Method  <- as.factor(Metadata152$P_Method)
+Metadata152$Batch      <- as.factor(Metadata152$Batch)
+Metadata152$Age_group  <- as.factor(Metadata152$Age_group)
+
+#cambiar contenido de celdas
+Metadata152$P_Method  <- as.character(Metadata152$P_Method)
+
+Metadata152$P_Method <- ifelse(Metadata152$P_Method == 'DF', '2steps', Metadata152$P_Method)
+Metadata152$P_Method <- ifelse(Metadata152$P_Method == 'DBNF', '2steps', Metadata152$P_Method)
+Metadata152$P_Method <- ifelse(Metadata152$P_Method == 'DBP', '2steps', Metadata152$P_Method)
+Metadata152$P_Method <- ifelse(Metadata152$P_Method == 'DBN', '2steps', Metadata152$P_Method)
+
+Metadata152$P_Method  <- as.factor(Metadata152$P_Method)
+
+dds152 <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ Type + P_Method)
+
+#test type(SE or PE) as batch in the formula
+keep152 <- rowSums(counts(dds152)) >= 10
+dds152 <- dds152[keep152,] #add the pval threshold somewhere
+dds152 <- DESeq(dds152)
+dds152
+
+#guardar el dds original
+save(dds152, file = "dds152.RData")
+#load("dds152.RData")
+
+# A) Plot PCA
+vsd152 <- vst(dds152, blind=FALSE) #normalizacion
+
+#library(limma)
+#plotDensities(assay(vsd), legend=F)
+vsd_mad152 <- apply(assay(vsd152), 1, mad)
+
+write.table(assay(vsd152),file ="Normalized152_counts.tsv")
+
+# BATCH - lo checamos y "no hay batch effect"
+mat152 <- assay(vsd152)
+mm152 <- model.matrix(~P_Method + Type, colData(vsd152))
+mat152 <- limma::removeBatchEffect(mat152, batch=vsd152$Type, design=mm152)
+assay(vsd152) <- mat152
+
+pcaData <- plotPCA(vsd152, intgroup=c("P_Method", "Type"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=P_Method, shape=Type)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()
+
+#lets get the gene names on the rownames of normalized counts
+
+normcounts152 <- assay(vsd152)
+
+listEnsembl()
+ensembl <- useEnsembl(biomart = "genes")
+datasets <- listDatasets(ensembl)
+ensembl.con <- useMart("ensembl", dataset = 'hsapiens_gene_ensembl')
+attr <- listAttributes(ensembl.con)
+filters <- listFilters(ensembl.con)
+
+geneIDs <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype', 'entrezgene_id'),
+              filters = "ensembl_gene_id",
+              values = rownames(normcounts152),
+              mart = ensembl.con)
+
+normcounts152_df<- as.data.frame(normcounts152)
+normcounts152_df<-rownames_to_column(normcounts152_df, var="ensembl_gene_id")
+newnormcounts152 <- left_join(normcounts152_df,geneIDs, by="ensembl_gene_id")
+
+save(newnormcounts152, file = "newnormcounts152GeneIDs.RData")
+#load("C:/Users/SaulKarr/OneDrive - Instituto Tecnologico y de Estudios Superiores de Monterrey/DBT_data/neubulkRNA/newnormcounts152GeneIDs.RData")
+
+#drop na
+nncounts152 <- newnormcounts152[(newnormcounts152$gene_biotype == "protein_coding"), ]
+nncounts152_2 <- nncounts152 %>% drop_na(external_gene_name)
+nncounts152_3 <- nncounts152_2[!duplicated(nncounts152_2$external_gene_name), ]
+rownames(nncounts152_3) <- nncounts152_3$external_gene_name
+
+neucounts152 <- nncounts152_3[,-c(1,154,155,156)]
+
+dim(neucounts152)
+save(neucounts152, file= "152neusplGeneIDs.RData") #para correr el NMF
+#load("152neusplGeneIDs.RData")
+
+write.csv(neucounts152,file ="Matriz152splNcounts.csv") #para CIBERSORTX
+#write.csv(neucounts,file ="Matriz152splNcounts.csv") 
+
+#load dds y neucounts
+
+# TOP 20 genes
+select <- order(rowMeans(neucounts152),
+                decreasing=TRUE)[1:20]
+
+#selectgenes <- (counts(dds,normalized=TRUE))[c('ENSG00000126012', 'ENSG00000147050', 'ENSG00000229807','ENSG00000067048','ENSG00000183878'),] 
+absolutedf <- as.data.frame(colData(dds152)[,c("Age_group","Sex","P_Method")])
+
+matneucounts152 <- as.matrix(neucounts152)
+
+col_fun = colorRamp2(c(5, 15, 25), c("blue", "white", "red"))
+
+pheatmap(matneucounts152[select,], 
+         cluster_rows=T, 
+         show_rownames=T, 
+         show_colnames = F,
+         cluster_cols=T,
+         col = col_fun,
+         name = "Norm counts",
+         #annotation_row= ifelse(rownames(assay(vsd)) %in% BeadsonlyDEGs, BeadsonlyDEGs$external_gene_name, "" ),
+         annotation_col = absolutedf,
+         row_names_side = "left",
+         show_row_dend = F,
+         show_column_dend = T)
+```
+
+```{r}
+
+Splreplicates <- Metadata152 %>% subset(Metadata152$Study == "SRP152983")
+Splreplicates
+
+```
+
+
+```{r Metadata description}
+library(ggplot2)
+library(RColorBrewer)
+
+bar1 <- as.data.frame(Metadata152$P_Method)
+colors1=c("darkolivegreen2","chartreuse4","cyan4","darkslateblue")
+
+bar1 %>% 
+  ggplot(aes(x = `Metadata152$P_Method`)) +
+geom_bar(color="white", fill=colors1) +
+  theme(legend.position="none") +
+  stat_count(geom = "text", 
+             aes(label = stat(count)),
+             position=position_fill(vjust=2),
+             colour="black")+
+  labs(y = " ", x= "Purification methods")
+
+
+bar2 <- as.data.frame(Metadata152$Sex)
+colors2=c("grey","purple4","violetred")
+
+bar2 %>% 
+  ggplot(aes(x = `Metadata152$Sex`)) +
+geom_bar(color="white", fill=colors2) +
+  theme(legend.position="none") +
+  stat_count(geom = "text", 
+             aes(label = stat(count)),
+             position=position_fill(vjust=2),
+             colour="black")+
+  labs(y = " ", x= "Sex groups")      
+           
+bar3 <- as.data.frame(Metadata152$Age_group)
+colors3=c("grey","darkgoldenrod","royalblue2","lightpink1")
+
+bar3 %>% 
+  ggplot(aes(x = `Metadata152$Age_group`)) +
+geom_bar(color="white", fill=colors3) +
+  theme(legend.position="none") +
+  stat_count(geom = "text", 
+             aes(label = stat(count)),
+             position=position_fill(vjust=2),
+             colour="black")+
+  labs(y = " ", x= "Age groups")     
+
+
+```
+
+
+```{r DiffExp and EVolcano for Density only vs Beads only}
+ddsDvB <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ P_Method)
+
+ddsDvB
+
+keepDvB <- rowSums(counts(ddsDvB)) >= 10
+
+ddsDvB <- ddsDvB[keepDvB,]
+
+ddsDvB <- DESeq(ddsDvB)
+ddsDvB
+
+save(ddsDvB, file= "ddsDvB.RData")
+
+#Expresion diferencial
+
+resultsNames(ddsDvB)
+DvB_res <-results(ddsDvB, contrast=c("P_Method","D","BN"))
+DvB_res
+
+save(DvB_res, file = "DensityvsBeadsRes.RData")
+
+DvB_res_df <- as.data.frame(DvB_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+DvB_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(DvB_res_df),
+              mart = ensembl.con)
+
+DvB_res_df<-rownames_to_column(DvB_res_df, var="ensembl_gene_id")
+DvB_res <- left_join(DvB_res_df,DvB_resGenes, by="ensembl_gene_id")
+
+dim(DvB_res) #52595 genes
+
+DvB_res$gene_biotype <- as.factor(DvB_res$gene_biotype)
+levels(DvB_res$gene_biotype) #37 diferentes gene_biotypes
+
+DvB_res2 <- DvB_res[(DvB_res$gene_biotype == "protein_coding"), ]
+dim(DvB_res2) #21312 filas o genes codificantes
+DvB_res3 <- DvB_res2 %>% drop_na(c(padj, gene_biotype))
+dim(DvB_res3) #18298 genes con padj
+
+#remover duplicates y guardar uniques
+DvB_uniqgenes <- DvB_res3[!duplicated(DvB_res3$external_gene_name), ] #18212 unique genes
+rownames(DvB_uniqgenes) <- DvB_uniqgenes$external_gene_name
+
+save(DvB_uniqgenes, file = "DBvB_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+DvB_uniqgenes$diffexpressed <- ""
+DvB_uniqgenes$diffexpressed[DvB_uniqgenes$log2FoldChange >= 1 & DvB_uniqgenes$padj < 0.05] <- "UP"
+DvB_uniqgenes$diffexpressed[DvB_uniqgenes$log2FoldChange <= -1 & DvB_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+DvB_onlyDEGs <- DvB_uniqgenes[!(DvB_uniqgenes$diffexpressed == ""), ] #4358 DEGs
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+DvB10Upgenes <- tail(arrange(DvB_onlyDEGs,log2FoldChange),10)
+DvB10Downgenes <- head(arrange(DvB_onlyDEGs,log2FoldChange),10)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+DvB_uniqgenes$genetags <- ifelse(DvB_uniqgenes$external_gene_name %in% DvB10Upgenes$external_gene_name,
+                                     DvB_uniqgenes$external_gene_name, 
+                                     ifelse(DvB_uniqgenes$external_gene_name %in% DvB10Downgenes$external_gene_name,
+                                            DvB_uniqgenes$external_gene_name, ""))
+
+## Enhanced volcano
+
+keyvalsDvB <- ifelse(
+    DvB_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(DvB_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsDvB[is.na(keyvalsDvB)] <- 'gray'
+  names(keyvalsDvB)[keyvalsDvB == 'red'] <- 'Highest'
+  names(keyvalsDvB)[keyvalsDvB == 'gray'] <- 'Mid'
+  names(keyvalsDvB)[keyvalsDvB == 'blue'] <- 'Lowest'
+
+  keyvals.shapeDvB <- ifelse(
+    DvB_uniqgenes$external_gene_name %in% DvB10Downgenes$external_gene_name, 6,
+      ifelse(DvB_uniqgenes$external_gene_name %in% DvB10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeDvB[is.na(keyvals.shapeDvB)] <- 4
+  names(keyvals.shapeDvB)[keyvals.shapeDvB == 4] <- 'Mid'
+  names(keyvals.shapeDvB)[keyvals.shapeDvB == 6] <- 'Lowest'
+  names(keyvals.shapeDvB)[keyvals.shapeDvB == 2] <- 'Highest'
+
+keyvals.colourDvB <- ifelse(
+    DvB_uniqgenes$pval < 0.05 & DvB_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(DvB_uniqgenes$pval < 0.05 & DvB_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+
+keyvals.colourDvB[is.na(keyvals.colourDvB)] <- 'gray'
+names(keyvals.colourDvB)[keyvals.colourDvB == 'red'] <- 'Up'
+names(keyvals.colourDvB)[keyvals.colourDvB == 'gray'] <- 'Mid'
+names(keyvals.colourDvB)[keyvals.colourDvB == 'blue'] <- 'Down'
+
+DvB1 <- EnhancedVolcano(DvB_uniqgenes,
+    lab = DvB_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = DvB_uniqgenes$external_gene_name[which(names(keyvalsDvB) %in% c('Highest', 'Lowest'))],
+    title = "Differential gene expression by purification method",
+  subtitle = bquote(italic("Density separation vs Negative selection beads")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((DvB_uniqgenes$padj<0.05 & 
+                          (DvB_uniqgenes$log2FoldChange >= 1 | DvB_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeDvB,
+  colCustom = keyvals.colourDvB,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 20,
+  maxoverlapsConnectors = Inf
+  )
+
+DvB1 +
+    ggplot2::coord_cartesian(xlim=c(-7.5,7.5)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-5,5, 5))
+
+```
+
+```{r DiffExp and EVolcano for Sex}
+ddsSex <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ Sex)
+
+ddsSex
+
+keepSex <- rowSums(counts(ddsSex)) >= 10
+
+ddsSex <- ddsSex[keepSex,]
+
+ddsSex <- DESeq(ddsSex)
+ddsSex
+
+save(ddsSex, file = "ddsSex.RData")
+
+#Expresion diferencial
+
+resultsNames(ddsSex)
+SexFvM_res <-results(ddsSex, contrast=c("Sex","F","M"))
+SexFvM_res
+
+save(SexFvM_res, file = "SexFvMRes.RData")
+load("SexFvMRes.RData")
+
+SexFvM_res_df <- as.data.frame(SexFvM_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+SexFvM_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(SexFvM_res_df),
+              mart = ensembl.con)
+
+SexFvM_res_df<-rownames_to_column(SexFvM_res_df, var="ensembl_gene_id")
+SexFvM_res <- left_join(SexFvM_res_df,SexFvM_resGenes, by="ensembl_gene_id")
+
+dim(SexFvM_res) #52595 genes
+
+SexFvM_res$gene_biotype <- as.factor(SexFvM_res$gene_biotype)
+levels(SexFvM_res$gene_biotype) #37 diferentes gene_biotypes
+
+SexFvM_res2 <- SexFvM_res[(SexFvM_res$gene_biotype == "protein_coding"), ]
+dim(SexFvM_res2) #21312 filas o genes codificantes
+SexFvM_res3 <- SexFvM_res2 %>% drop_na(c(padj, gene_biotype))
+dim(SexFvM_res3) #15802 genes con padj
+
+#remover duplicates y guardar uniques
+SexFvM_uniqgenes <- SexFvM_res3[!duplicated(SexFvM_res3$external_gene_name), ] #15757 unique genes
+rownames(SexFvM_uniqgenes) <- SexFvM_uniqgenes$external_gene_name
+
+save(SexFvM_uniqgenes, file = "SexFvM_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+SexFvM_uniqgenes$diffexpressed <- ""
+SexFvM_uniqgenes$diffexpressed[SexFvM_uniqgenes$log2FoldChange >= 1 & SexFvM_uniqgenes$padj < 0.05] <- "UP"
+SexFvM_uniqgenes$diffexpressed[SexFvM_uniqgenes$log2FoldChange <= -1 & SexFvM_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+SexFvM_onlyDEGs <- SexFvM_uniqgenes[!(SexFvM_uniqgenes$diffexpressed == ""), ] #5 DEGs
+
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+SexFvM10Upgenes <- tail(arrange(SexFvM_onlyDEGs,log2FoldChange),2)
+SexFvM10Downgenes <- head(arrange(SexFvM_onlyDEGs,log2FoldChange),3)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+SexFvM_uniqgenes$genetags <- ifelse(SexFvM_uniqgenes$external_gene_name %in% SexFvM10Upgenes$external_gene_name,
+                                     SexFvM_uniqgenes$external_gene_name, 
+                                     ifelse(SexFvM_uniqgenes$external_gene_name %in% SexFvM10Downgenes$external_gene_name,
+                                            SexFvM_uniqgenes$external_gene_name, ""))
+
+keyvalsS <- ifelse(
+    SexFvM_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(SexFvM_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsS[is.na(keyvalsS)] <- 'gray'
+  names(keyvalsS)[keyvalsS == 'red'] <- 'Highest'
+  names(keyvalsS)[keyvalsS == 'gray'] <- 'Mid'
+  names(keyvalsS)[keyvalsS == 'blue'] <- 'Lowest'
+
+keyvals.shapeS <- ifelse(
+    SexFvM_uniqgenes$external_gene_name %in% SexFvM10Downgenes$external_gene_name, 6,
+      ifelse(SexFvM_uniqgenes$external_gene_name %in% SexFvM10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeS[is.na(keyvals.shapeS)] <- 4
+  names(keyvals.shapeS)[keyvals.shapeS == 4] <- 'Mid'
+  names(keyvals.shapeS)[keyvals.shapeS == 6] <- 'Lowest'
+  names(keyvals.shapeS)[keyvals.shapeS == 2] <- 'Highest'
+
+keyvals.colourS <- ifelse(
+    SexFvM_uniqgenes$pval < 0.05 & SexFvM_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(SexFvM_uniqgenes$pval < 0.05 & SexFvM_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+keyvals.colourS[is.na(keyvals.colourS)] <- 'gray'
+names(keyvals.colourS)[keyvals.colourS == 'red'] <- 'Up'
+names(keyvals.colourS)[keyvals.colourS == 'gray'] <- 'Mid'
+names(keyvals.colourS)[keyvals.colourS == 'blue'] <- 'Down'
+
+SexFvM <- EnhancedVolcano(SexFvM_uniqgenes,
+    lab = SexFvM_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = SexFvM_uniqgenes$external_gene_name[which(names(keyvalsS) %in% c('Highest', 'Lowest'))],
+    title = "Differential expression by SexFvM",
+  subtitle = bquote(italic("Female vs Male")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((SexFvM_uniqgenes$padj<0.05 & 
+                          (SexFvM_uniqgenes$log2FoldChange >= 1 | SexFvM_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeS,
+  colCustom = keyvals.colourS,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 0,
+  maxoverlapsConnectors = Inf
+  )
+
+SexFvM +
+    ggplot2::coord_cartesian(xlim=c(-7.5, 7.5), ylim=c(0,8)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-5,5, 5))
+
+```
+
+```{r DiffExp and EVolcano for Age}
+
+ddsAge <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ Age_group)
+
+ddsAge
+
+keepAge <- rowSums(counts(ddsAge)) >= 10
+
+ddsAge <- ddsAge[keepAge,]
+
+ddsAge <- DESeq(ddsAge)
+ddsAge
+
+save(ddsAge, file = "ddsAge.RData")
+
+#Expresion diferencial
+
+resultsNames(ddsAge)
+
+AgeOvY_res <-results(ddsAge, contrast=c("Age_group","O","Y"))
+AgeOvY_res
+
+AgeYvO_res <-results(ddsAge, contrast=c("Age_group","Y","O"))
+AgeYvO_res
+
+save(AgeOvY_res, file = "AgeOvYRes.RData")
+#load("AgeOvYRes.RData")
+
+save(AgeYvO_res, file = "AgeYvORes.RData")
+#load("AgeYvORes.RData")
+
+AgeOvY_res_df <- as.data.frame(AgeOvY_res)
+AgeYvO_res_df <- as.data.frame(AgeYvO_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+AgeOvY_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(AgeOvY_res_df),
+              mart = ensembl.con)
+
+AgeOvY_res_df<-rownames_to_column(AgeOvY_res_df, var="ensembl_gene_id")
+AgeOvY_res <- left_join(AgeOvY_res_df,AgeOvY_resGenes, by="ensembl_gene_id")
+
+dim(AgeOvY_res) #52595 genes
+
+AgeOvY_res$gene_biotype <- as.factor(AgeOvY_res$gene_biotype)
+levels(AgeOvY_res$gene_biotype) #37 diferentes gene_biotypes
+
+AgeOvY_res2 <- AgeOvY_res[(AgeOvY_res$gene_biotype == "protein_coding"), ]
+dim(AgeOvY_res2) #21312 filas o genes codificantes
+AgeOvY_res3 <- AgeOvY_res2 %>% drop_na(c(padj, gene_biotype))
+dim(AgeOvY_res3) #17380 genes con padj
+
+#remover duplicates y guardar uniques
+AgeOvY_uniqgenes <- AgeOvY_res3[!duplicated(AgeOvY_res3$external_gene_name), ] #17313 unique genes
+rownames(AgeOvY_uniqgenes) <- AgeOvY_uniqgenes$external_gene_name
+
+save(AgeOvY_uniqgenes, file = "AgeOvY_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+AgeOvY_uniqgenes$diffexpressed <- ""
+AgeOvY_uniqgenes$diffexpressed[AgeOvY_uniqgenes$log2FoldChange >= 1 & AgeOvY_uniqgenes$padj < 0.05] <- "UP"
+AgeOvY_uniqgenes$diffexpressed[AgeOvY_uniqgenes$log2FoldChange <= -1 & AgeOvY_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+AgeOvY_onlyDEGs <- AgeOvY_uniqgenes[!(AgeOvY_uniqgenes$diffexpressed == ""), ] #3 DEGs
+
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+AgeOvY10Upgenes <- tail(arrange(AgeOvY_onlyDEGs,log2FoldChange),2)
+AgeOvY10Downgenes <- head(arrange(AgeOvY_onlyDEGs,log2FoldChange),1)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+AgeOvY_uniqgenes$genetags <- ifelse(AgeOvY_uniqgenes$external_gene_name %in% AgeOvY10Upgenes$external_gene_name,
+                                     AgeOvY_uniqgenes$external_gene_name, 
+                                     ifelse(AgeOvY_uniqgenes$external_gene_name %in% AgeOvY10Downgenes$external_gene_name,
+                                            AgeOvY_uniqgenes$external_gene_name, ""))
+
+
+keyvalsA <- ifelse(
+    AgeOvY_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(AgeOvY_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsA[is.na(keyvalsA)] <- 'gray'
+  names(keyvalsA)[keyvalsA == 'red'] <- 'Highest'
+  names(keyvalsA)[keyvalsA == 'gray'] <- 'Mid'
+  names(keyvalsA)[keyvalsA == 'blue'] <- 'Lowest'
+
+keyvals.shapeA <- ifelse(
+    AgeOvY_uniqgenes$external_gene_name %in% AgeOvY10Downgenes$external_gene_name, 6,
+      ifelse(AgeOvY_uniqgenes$external_gene_name %in% AgeOvY10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeA[is.na(keyvals.shapeA)] <- 4
+  names(keyvals.shapeA)[keyvals.shapeA == 4] <- 'Mid'
+  names(keyvals.shapeA)[keyvals.shapeA == 6] <- 'Lowest'
+  names(keyvals.shapeA)[keyvals.shapeA == 2] <- 'Highest'
+
+keyvals.colourA <- ifelse(
+    AgeOvY_uniqgenes$pval < 0.05 & AgeOvY_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(AgeOvY_uniqgenes$pval < 0.05 & AgeOvY_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+keyvals.colourA[is.na(keyvals.colourA)] <- 'gray'
+names(keyvals.colourA)[keyvals.colourA == 'red'] <- 'Up'
+names(keyvals.colourA)[keyvals.colourA == 'gray'] <- 'Mid'
+names(keyvals.colourA)[keyvals.colourA == 'blue'] <- 'Down'
+
+AgeOvY <- EnhancedVolcano(AgeOvY_uniqgenes,
+    lab = AgeOvY_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = AgeOvY_uniqgenes$external_gene_name[which(names(keyvalsA) %in% c('Highest', 'Lowest'))],
+    title = "Differential gene expression by AgeOvY",
+  subtitle = bquote(italic("Older than 50 vs 30 and younger")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((AgeOvY_uniqgenes$padj<0.05 & 
+                          (AgeOvY_uniqgenes$log2FoldChange >= 1 | AgeOvY_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeA,
+  colCustom = keyvals.colourA,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 0,
+  maxoverlapsConnectors = Inf
+  )
+
+AgeOvY +
+    ggplot2::coord_cartesian(xlim=c(-7.5, 7.5), ylim=c(0,8)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-5,5, 5))
+
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+AgeYvO_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(AgeYvO_res_df),
+              mart = ensembl.con)
+
+AgeYvO_res_df<-rownames_to_column(AgeYvO_res_df, var="ensembl_gene_id")
+AgeYvO_res <- left_join(AgeYvO_res_df,AgeYvO_resGenes, by="ensembl_gene_id")
+
+dim(AgeYvO_res) #52595 genes
+
+AgeYvO_res$gene_biotype <- as.factor(AgeYvO_res$gene_biotype)
+levels(AgeYvO_res$gene_biotype) #37 diferentes gene_biotypes
+
+AgeYvO_res2 <- AgeYvO_res[(AgeYvO_res$gene_biotype == "protein_coding"), ]
+dim(AgeYvO_res2) #21312 filas o genes codificantes
+AgeYvO_res3 <- AgeYvO_res2 %>% drop_na(c(padj, gene_biotype))
+dim(AgeYvO_res3) #17380 genes con padj
+
+#remover duplicates y guardar uniques
+AgeYvO_uniqgenes <- AgeYvO_res3[!duplicated(AgeYvO_res3$external_gene_name), ] #17313 unique genes
+rownames(AgeYvO_uniqgenes) <- AgeYvO_uniqgenes$external_gene_name
+
+save(AgeYvO_uniqgenes, file = "AgeYvO_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+AgeYvO_uniqgenes$diffexpressed <- ""
+AgeYvO_uniqgenes$diffexpressed[AgeYvO_uniqgenes$log2FoldChange >= 1 & AgeYvO_uniqgenes$padj < 0.05] <- "UP"
+AgeYvO_uniqgenes$diffexpressed[AgeYvO_uniqgenes$log2FoldChange <= -1 & AgeYvO_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+AgeYvO_onlyDEGs <- AgeYvO_uniqgenes[!(AgeYvO_uniqgenes$diffexpressed == ""), ] #3 DEGs
+
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+AgeYvO10Upgenes <- tail(arrange(AgeYvO_onlyDEGs,log2FoldChange),1)
+AgeYvO10Downgenes <- head(arrange(AgeYvO_onlyDEGs,log2FoldChange),2)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+AgeYvO_uniqgenes$genetags <- ifelse(AgeYvO_uniqgenes$external_gene_name %in% AgeYvO10Upgenes$external_gene_name,
+                                     AgeYvO_uniqgenes$external_gene_name, 
+                                     ifelse(AgeYvO_uniqgenes$external_gene_name %in% AgeYvO10Downgenes$external_gene_name,
+                                            AgeYvO_uniqgenes$external_gene_name, ""))
+
+keyvalsYvO <- ifelse(
+    AgeYvO_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(AgeYvO_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsYvO[is.na(keyvalsYvO)] <- 'gray'
+  names(keyvalsYvO)[keyvalsYvO == 'red'] <- 'Highest'
+  names(keyvalsYvO)[keyvalsYvO == 'gray'] <- 'Mid'
+  names(keyvalsYvO)[keyvalsYvO == 'blue'] <- 'Lowest'
+
+keyvals.shapeYvO <- ifelse(
+    AgeYvO_uniqgenes$external_gene_name %in% AgeYvO10Downgenes$external_gene_name, 6,
+      ifelse(AgeYvO_uniqgenes$external_gene_name %in% AgeYvO10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeYvO[is.na(keyvals.shapeYvO)] <- 4
+  names(keyvals.shapeYvO)[keyvals.shapeYvO == 4] <- 'Mid'
+  names(keyvals.shapeYvO)[keyvals.shapeYvO == 6] <- 'Lowest'
+  names(keyvals.shapeYvO)[keyvals.shapeYvO == 2] <- 'Highest'
+
+keyvals.colourYvO <- ifelse(
+    AgeYvO_uniqgenes$pval < 0.05 & AgeYvO_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(AgeYvO_uniqgenes$pval < 0.05 & AgeYvO_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+keyvals.colourYvO[is.na(keyvals.colourYvO)] <- 'gray'
+names(keyvals.colourYvO)[keyvals.colourYvO == 'red'] <- 'Up'
+names(keyvals.colourYvO)[keyvals.colourYvO == 'gray'] <- 'Mid'
+names(keyvals.colourYvO)[keyvals.colourYvO == 'blue'] <- 'Down'
+
+AgeYvO <- EnhancedVolcano(AgeYvO_uniqgenes,
+    lab = AgeYvO_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = AgeYvO_uniqgenes$external_gene_name[which(names(keyvalsYvO) %in% c('Highest', 'Lowest'))],
+    title = "Differential gene expression by Age",
+  subtitle = bquote(italic("30 and younger vs Older than 50")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((AgeYvO_uniqgenes$padj<0.05 & 
+                          (AgeYvO_uniqgenes$log2FoldChange >= 1 | AgeYvO_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeYvO,
+  colCustom = keyvals.colourYvO,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 0,
+  maxoverlapsConnectors = Inf
+  )
+
+AgeYvO +
+    ggplot2::coord_cartesian(xlim=c(-7.5, 7.5), ylim=c(0,8)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-5,5, 5))
+
+
+
+```
+
+
+```{r DiffExp and EVolcano for Density}
+ddsDens <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ Density)
+
+ddsDens
+
+keepDens <- rowSums(counts(ddsDens)) >= 10
+
+ddsDens <- ddsDens[keepDens,]
+
+ddsDens <- DESeq(ddsDens)
+ddsDens
+
+#Expresion diferencial
+
+resultsNames(ddsDens)
+D_res <-results(ddsDens, contrast=c("Density","1","0"))
+D_res
+
+save(D_res, file = "DensityRes.RData")
+
+D_res_df <- as.data.frame(D_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+D_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(D_res_df),
+              mart = ensembl.con)
+
+D_res_df<-rownames_to_column(D_res_df, var="ensembl_gene_id")
+Dens_res <- left_join(D_res_df,D_resGenes, by="ensembl_gene_id")
+
+dim(Dens_res) #52595 genes
+
+Dens_res$gene_biotype <- as.factor(Dens_res$gene_biotype)
+levels(Dens_res$gene_biotype) #37 diferentes gene_biotypes
+
+#library("tidyr")
+Dens_res2 <- Dens_res[(Dens_res$gene_biotype == "protein_coding"), ]
+dim(Dens_res2) #21312 filas o genes codificantes
+Dens_res3 <- Dens_res2 %>% drop_na(c(padj, gene_biotype))
+dim(Dens_res3) #17889 genes con padj
+
+#remover duplicates y guardar uniques
+D_uniqgenes <- Dens_res3[!duplicated(Dens_res3$external_gene_name), ] #17804 unique genes
+rownames(D_uniqgenes) <- D_uniqgenes$external_gene_name
+
+save(D_uniqgenes, file = "D_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+D_uniqgenes$diffexpressed <- ""
+D_uniqgenes$diffexpressed[D_uniqgenes$log2FoldChange >= 1 & D_uniqgenes$padj < 0.05] <- "UP"
+D_uniqgenes$diffexpressed[D_uniqgenes$log2FoldChange <= -1 & D_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+D_onlyDEGs <- D_uniqgenes[!(D_uniqgenes$diffexpressed == ""), ] #1633 DEGs
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+D10Upgenes <- tail(arrange(D_onlyDEGs,log2FoldChange),10)
+D10Downgenes <- head(arrange(D_onlyDEGs,log2FoldChange),10)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+D_uniqgenes$genetags <- ifelse(D_uniqgenes$external_gene_name %in% D10Upgenes$external_gene_name,
+                                     D_uniqgenes$external_gene_name, 
+                                     ifelse(D_uniqgenes$external_gene_name %in% D10Downgenes$external_gene_name,
+                                            D_uniqgenes$external_gene_name, ""))
+
+## Enhanced volcano
+
+  keyvalsD <- ifelse(
+    D_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(D_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsD[is.na(keyvalsD)] <- 'gray'
+  names(keyvalsD)[keyvalsD == 'red'] <- 'Highest'
+  names(keyvalsD)[keyvalsD == 'gray'] <- 'Regular'
+  names(keyvalsD)[keyvalsD == 'blue'] <- 'Lowest'
+
+# create custom key-value pairs for different genes
+  # this can be achieved with nested ifelse statements
+  keyvals.shapeD <- ifelse(
+    D_uniqgenes$external_gene_name %in% D10Downgenes$external_gene_name, 6,
+      ifelse(D_uniqgenes$external_gene_name %in% D10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeD[is.na(keyvals.shapeD)] <- 4
+  names(keyvals.shapeD)[keyvals.shapeD == 4] <- 'Regular'
+  names(keyvals.shapeD)[keyvals.shapeD == 6] <- 'Lowest'
+  names(keyvals.shapeD)[keyvals.shapeD == 2] <- 'Highest'
+
+keyvals.colourD <- ifelse(
+    D_uniqgenes$pval < 0.05 & D_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(D_uniqgenes$pval < 0.05 & D_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+keyvals.colourD[is.na(keyvals.colourD)] <- 'gray'
+names(keyvals.colourD)[keyvals.colourD == 'red'] <- 'Up'
+names(keyvals.colourD)[keyvals.colourD == 'gray'] <- 'Basal'
+names(keyvals.colourD)[keyvals.colourD == 'blue'] <- 'Down'
+
+D1 <- EnhancedVolcano(D_uniqgenes,
+    lab = D_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = D_uniqgenes$external_gene_name[which(names(keyvalsD) %in% c('Highest', 'Lowest'))],
+    title = "Differential gene expression by purification method",
+  subtitle = bquote(italic("Density gradient centrifugation only")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((D_uniqgenes$padj<0.05 & 
+                          (D_uniqgenes$log2FoldChange >= 1 | D_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeD,
+  colCustom = keyvals.colourD,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 0.5,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.6,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'bottom',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = T,
+  max.overlaps = 0,
+  maxoverlapsConnectors = Inf
+  )
+
+D1 +
+    ggplot2::coord_cartesian(xlim=c(-10, 10)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-10,10, 5))
+
+```
+
+```{r DiffExp and EVolcano for Beads}
+ddsBeads <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Metadata152,
+                              design = ~ Beads)
+
+ddsBeads
+
+keepBeads <- rowSums(counts(ddsBeads)) >= 10
+
+ddsBeads <- ddsBeads[keepBeads,]
+
+ddsBeads <- DESeq(ddsBeads)
+ddsBeads
+
+#Expresion diferencial
+
+resultsNames(ddsBeads)
+B_res <-results(ddsBeads, contrast=c("Beads","1","0"))
+B_res
+
+save(B_res, file = "BeadsRes.RData")
+
+B_res_df <- as.data.frame(B_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+B_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(B_res_df),
+              mart = ensembl.con)
+
+B_res_df <- rownames_to_column(B_res_df, var="ensembl_gene_id")
+Beads_res <- left_join(B_res_df,B_resGenes, by="ensembl_gene_id")
+
+dim(Beads_res) #52595 genes
+
+Beads_res$gene_biotype <- as.factor(Beads_res$gene_biotype)
+levels(Beads_res$gene_biotype) #37 diferentes gene_biotypes
+
+#bar4 <- as.data.frame(Beads_res$gene_biotype)
+#r_color <- colors()
+#head(r_color, 37)
+#colors4 <- c("white",      "aliceblue",    "antiquewhite",   "antiquewhite1" , "antiquewhite2" , "antiquewhite3" , "antiquewhite4" , "aquamarine",   "aquamarine1",    "aquamarine2",    "aquamarine3" ,   "aquamarine4",    "azure"   ,       "azure1"    ,     "azure2"  ,       "azure3"        ,
+"azure4"      ,   "beige"   ,       "bisque"       ,  "bisque1"   ,     "bisque2"  ,      "bisque3"    ,    "bisque4"  ,      "black"         ,
+"blanchedalmond", "blue"   ,        "blue1"         , "blue2"    ,      "blue3"     ,     "blue4"       ,   "blueviolet",     "brown"         ,
+"brown1"         ,"brown2",         "brown3"        , "brown4"  ,       "burlywood"  , "black")
+
+#bar4 %>% 
+ # ggplot(aes(x = `Beads_res$gene_biotype`)) +
+#geom_bar(color="white", fill=colors4)
+
+#bar5 <- barplot(prop.table(table(Beads_res$gene_biotype)),
+        col = colors4,
+        ylab = "Proportion",
+        xlab = "Race",
+        horiz=F,
+        main="title")
+
+#?barplot
+
+Beads_res2 <- Beads_res[(Beads_res$gene_biotype == "protein_coding"), ]
+dim(Beads_res2) #21312 filas o genes codificantes
+Beads_res3 <- Beads_res2 %>% drop_na(c(padj, gene_biotype))
+dim(Beads_res3) #17894 genes con padj
+
+#remover duplicates y guardar uniques
+#B_Duppgenes <- Beads_res3$external_gene_name[duplicated(Beads_res3$external_gene_name)]
+B_uniqgenes <- Beads_res3[!duplicated(Beads_res3$external_gene_name), ] #17813 unique genes
+rownames(B_uniqgenes) <- B_uniqgenes$external_gene_name
+
+save(B_uniqgenes, file = "B_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+B_uniqgenes$diffexpressed <- ""
+B_uniqgenes$diffexpressed[B_uniqgenes$log2FoldChange >= 1 & B_uniqgenes$padj < 0.05] <- "UP"
+B_uniqgenes$diffexpressed[B_uniqgenes$log2FoldChange <= -1 & B_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+B_onlyDEGs <- B_uniqgenes[!(B_uniqgenes$diffexpressed == ""), ] #3860 DEGs
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+B10Upgenes <- tail(arrange(B_onlyDEGs,log2FoldChange),10)
+B10Downgenes <- head(arrange(B_onlyDEGs,log2FoldChange),10)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+B_uniqgenes$genetags <- ifelse(B_uniqgenes$external_gene_name %in% B10Upgenes$external_gene_name,
+                                     B_uniqgenes$external_gene_name, 
+                                     ifelse(B_uniqgenes$external_gene_name %in% B10Downgenes$external_gene_name,
+                                            B_uniqgenes$external_gene_name, ""))
+
+## Enhanced volcano
+
+# create custom key-value pairs for 'high', 'low', 'mid' expression by fold-change
+  # this can be achieved with nested ifelse statements
+  keyvalsB <- ifelse(
+    B_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(B_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsB[is.na(keyvalsB)] <- 'gray'
+  names(keyvalsB)[keyvalsB == 'red'] <- 'Highest'
+  names(keyvalsB)[keyvalsB == 'gray'] <- 'Mid'
+  names(keyvalsB)[keyvalsB == 'blue'] <- 'Lowest'
+
+# create custom key-value pairs for different genes
+  # this can be achieved with nested ifelse statements
+  keyvals.shapeB <- ifelse(
+    B_uniqgenes$external_gene_name %in% B10Downgenes$external_gene_name, 6,
+      ifelse(B_uniqgenes$external_gene_name %in% B10Upgenes$external_gene_name, 2, 4))
+  
+  keyvals.shapeB[is.na(keyvals.shapeB)] <- 4
+  names(keyvals.shapeB)[keyvals.shapeB == 4] <- 'Mid'
+  names(keyvals.shapeB)[keyvals.shapeB == 6] <- 'Lowest'
+  names(keyvals.shapeB)[keyvals.shapeB == 2] <- 'Highest'
+
+keyvals.colourB <- ifelse(
+    B_uniqgenes$pval < 0.05 & B_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(B_uniqgenes$pval < 0.05 & B_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+keyvals.colourB[is.na(keyvals.colourB)] <- 'gray'
+names(keyvals.colourB)[keyvals.colourB == 'red'] <- 'Up'
+names(keyvals.colourB)[keyvals.colourB == 'gray'] <- 'Mid'
+names(keyvals.colourB)[keyvals.colourB == 'blue'] <- 'Down'
+
+B1 <- EnhancedVolcano(B_uniqgenes,
+    lab = B_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = B_uniqgenes$external_gene_name[which(names(keyvalsB) %in% c('Highest', 'Lowest'))],
+    #title = "DE by purification method",
+  subtitle = bquote(italic("Beads for negative selection")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((B_uniqgenes$padj<0.05 & 
+                          (B_uniqgenes$log2FoldChange >= 1 | B_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeB,
+  colCustom = keyvals.colourB,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 0.5,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.6,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'bottom',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 20,
+  maxoverlapsConnectors = Inf
+  )
+
+B1 +
+    ggplot2::coord_cartesian(xlim=c(-10, 10)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-10,10, 5))
+
+```
+
+
+```{r DiffExp and EVolcano for Density+Beads vs only Density}
+#a partir de la matriz anterior
+ddsDBvD <- ddsDBvB
+
+#Expresion diferencial
+
+resultsNames(ddsDBvD)
+DBvD_res <-results(ddsDBvD, contrast=c("Condition","DBN","D"))
+DBvD_res
+
+save(DBvD_res, file = "DensityandBeadsvsOnlyDensityRes.RData")
+
+DBvD_res_df <- as.data.frame(DBvD_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+DBvD_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(DBvD_res_df),
+              mart = ensembl.con)
+
+DBvD_res_df<-rownames_to_column(DBvD_res_df, var="ensembl_gene_id")
+DBvD_res <- left_join(DBvD_res_df,DBvD_resGenes, by="ensembl_gene_id")
+
+dim(DBvD_res) #52998 genes
+
+DBvD_res$gene_biotype <- as.factor(DBvD_res$gene_biotype)
+levels(DBvD_res$gene_biotype) #37 diferentes gene_biotypes
+
+DBvD_res2 <- DBvD_res[(DBvD_res$gene_biotype == "protein_coding"), ]
+dim(DBvD_res2) #21421 filas o genes codificantes
+DBvD_res3 <- DBvD_res2 %>% drop_na(c(padj, gene_biotype))
+dim(DBvD_res3) #17785 genes con padj
+
+#remover duplicates y guardar uniques
+DBvD_uniqgenes <- DBvD_res3[!duplicated(DBvD_res3$external_gene_name), ] #17718 unique genes
+rownames(DBvD_uniqgenes) <- DBvD_uniqgenes$external_gene_name
+
+save(DBvD_uniqgenes, file = "DBvD_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+DBvD_uniqgenes$diffexpressed <- ""
+DBvD_uniqgenes$diffexpressed[DBvD_uniqgenes$log2FoldChange >= 1 & DBvD_uniqgenes$padj < 0.05] <- "UP"
+DBvD_uniqgenes$diffexpressed[DBvD_uniqgenes$log2FoldChange <= -1 & DBvD_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+DBvD_onlyDEGs <- DBvD_uniqgenes[!(DBvD_uniqgenes$diffexpressed == ""), ] #2124 DEGs
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+DBvD10Upgenes <- tail(arrange(DBvD_onlyDEGs,log2FoldChange),10)
+DBvD10Downgenes <- head(arrange(DBvD_onlyDEGs,log2FoldChange),10)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+DBvD_uniqgenes$genetags <- ifelse(DBvD_uniqgenes$external_gene_name %in% DBvD10Upgenes$external_gene_name,
+                                     DBvD_uniqgenes$external_gene_name, 
+                                     ifelse(DBvD_uniqgenes$external_gene_name %in% DBvD10Downgenes$external_gene_name,
+                                            DBvD_uniqgenes$external_gene_name, ""))
+
+## Enhanced volcano
+
+keyvalsDBvD <- ifelse(
+    DBvD_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(DBvD_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsDBvD[is.na(keyvalsDBvD)] <- 'gray'
+  names(keyvalsDBvD)[keyvalsDBvD == 'red'] <- 'Highest'
+  names(keyvalsDBvD)[keyvalsDBvD == 'gray'] <- 'Mid'
+  names(keyvalsDBvD)[keyvalsDBvD == 'blue'] <- 'Lowest'
+
+  keyvals.shapeDBvD <- ifelse(
+    DBvD_uniqgenes$external_gene_name %in% DBvD10Downgenes$external_gene_name, 6,
+      ifelse(DBvD_uniqgenes$external_gene_name %in% DBvD10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeDBvD[is.na(keyvals.shapeDBvD)] <- 4
+  names(keyvals.shapeDBvD)[keyvals.shapeDBvD == 4] <- 'Mid'
+  names(keyvals.shapeDBvD)[keyvals.shapeDBvD == 6] <- 'Lowest'
+  names(keyvals.shapeDBvD)[keyvals.shapeDBvD == 2] <- 'Highest'
+
+keyvals.colourDBvD <- ifelse(
+    DBvD_uniqgenes$pval < 0.05 & DBvD_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(DBvD_uniqgenes$pval < 0.05 & DBvD_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+
+keyvals.colourDBvD[is.na(keyvals.colourDBvD)] <- 'gray'
+names(keyvals.colourDBvD)[keyvals.colourDBvD == 'red'] <- 'Up'
+names(keyvals.colourDBvD)[keyvals.colourDBvD == 'gray'] <- 'Mid'
+names(keyvals.colourDBvD)[keyvals.colourDBvD == 'blue'] <- 'Down'
+
+DBvD1 <- EnhancedVolcano(DBvD_uniqgenes,
+    lab = DBvD_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = DBvD_uniqgenes$external_gene_name[which(names(keyvalsDBvD) %in% c('Highest', 'Lowest'))],
+    title = "Differential gene expression by purification method",
+  subtitle = bquote(italic("2-step purification (DBN) vs Density only (D)")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((DBvD_uniqgenes$padj<0.05 & 
+                          (DBvD_uniqgenes$log2FoldChange >= 1 | DBvD_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeDBvD,
+  colCustom = keyvals.colourDBvD,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 20,
+  maxoverlapsConnectors = Inf
+  )
+
+DBvD1 +
+    ggplot2::coord_cartesian(xlim=c(-10, 10)) +
+    ggplot2::scale_x_continuous(
+      breaks=seq(-10,10, 5))
+
+```
+
+
+```{r DE and EVolcano for Sex+Age}
+
+OctMetadata184$sexage <- paste(OctMetadata184$sex, OctMetadata184$agelevel, sep = "")
+OctMetadata184$sexage <- as.factor(OctMetadata184$sexage)
+
+levels(OctMetadata184$sexage)
+OctMetadata184$sexage
+
+ddsSexAge <- DESeqDataSetFromMatrix(countData = Neu184,
+                              colData = OctMetadata184,
+                              design = ~ sexage)
+
+ddsSexAge
+
+keepSexAge <- rowSums(counts(ddsSexAge)) >= 10
+
+ddsSexAge <- ddsSexAge[keepSexAge,]
+
+ddsSexAge <- DESeq(ddsSexAge)
+ddsSexAge
+
+#Expresion diferencial
+
+resultsNames(ddsSexAge)
+SexAge_res <-results(ddsSexAge, contrast=c("sexage","FY","MO"))
+SexAge_res
+
+save(SexAge_res, file = "FYvsMOres.RData")
+load("FYvsMOres.RData")
+
+SexAge_res_df <- as.data.frame(SexAge_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+SexAge_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(SexAge_res_df),
+              mart = ensembl.con)
+
+SexAge_res_df<-rownames_to_column(SexAge_res_df, var="ensembl_gene_id")
+SexAge_res <- left_join(SexAge_res_df,SexAge_resGenes, by="ensembl_gene_id")
+
+dim(SexAge_res) #52998 genes
+
+SexAge_res$gene_biotype <- as.factor(SexAge_res$gene_biotype)
+levels(SexAge_res$gene_biotype) #37 diferentes gene_biotypes
+
+SexAge_res2 <- SexAge_res[(SexAge_res$gene_biotype == "protein_coding"), ]
+dim(SexAge_res2) #21411 filas o genes codificantes
+SexAge_res3 <- SexAge_res2 %>% drop_na(c(padj, gene_biotype))
+dim(SexAge_res3) #16431 genes con padj
+
+#remover duplicates y guardar uniques
+SexAge_uniqgenes <- SexAge_res3[!duplicated(SexAge_res3$external_gene_name), ] #15980 unique genes
+rownames(SexAge_uniqgenes) <- SexAge_uniqgenes$external_gene_name
+
+save(SexAge_uniqgenes, file = "SexAge_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+SexAge_uniqgenes$diffexpressed <- ""
+SexAge_uniqgenes$diffexpressed[SexAge_uniqgenes$log2FoldChange >= 1 & SexAge_uniqgenes$padj < 0.05] <- "UP"
+SexAge_uniqgenes$diffexpressed[SexAge_uniqgenes$log2FoldChange <= -1 & SexAge_uniqgenes$padj < 0.05] <- "DOWN"
+
+#make a df with only top and down genes using drop na then filter by head and tails
+SexAge_onlyDEGs <- SexAge_uniqgenes[!(SexAge_uniqgenes$diffexpressed == ""), ] #34 DEGs
+
+# Identify the top 20 or desired hits, arrange() apparently goes from AtoZ
+SexAge10Upgenes <- tail(arrange(SexAge_onlyDEGs,log2FoldChange),10)
+SexAge10Downgenes <- head(arrange(SexAge_onlyDEGs,log2FoldChange),2)
+
+# Add column label, containing the gene name for the top hits or nothing for all others
+SexAge_uniqgenes$genetags <- ifelse(SexAge_uniqgenes$external_gene_name %in% SexAge10Upgenes$external_gene_name,
+                                     SexAge_uniqgenes$external_gene_name, 
+                                     ifelse(SexAge_uniqgenes$external_gene_name %in% SexAge10Downgenes$external_gene_name,
+                                            SexAge_uniqgenes$external_gene_name, ""))
+
+keyvalsSA <- ifelse(
+    SexAge_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(SexAge_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+  keyvalsSA[is.na(keyvalsSA)] <- 'gray'
+  names(keyvalsSA)[keyvalsSA == 'red'] <- 'Highest'
+  names(keyvalsSA)[keyvalsSA == 'gray'] <- 'Mid'
+  names(keyvalsSA)[keyvalsSA == 'blue'] <- 'Lowest'
+
+keyvals.shapeSA <- ifelse(
+    SexAge_uniqgenes$external_gene_name %in% SexAge10Downgenes$external_gene_name, 6,
+      ifelse(SexAge_uniqgenes$external_gene_name %in% SexAge10Upgenes$external_gene_name, 2,
+        4))
+  
+  keyvals.shapeSA[is.na(keyvals.shapeSA)] <- 4
+  names(keyvals.shapeSA)[keyvals.shapeSA == 4] <- 'Mid'
+  names(keyvals.shapeSA)[keyvals.shapeSA == 6] <- 'Lowest'
+  names(keyvals.shapeSA)[keyvals.shapeSA == 2] <- 'Highest'
+
+keyvals.colourSA <- ifelse(
+    SexAge_uniqgenes$pval < 0.05 & SexAge_uniqgenes$log2FoldChange <= -1, 'blue',
+      ifelse(SexAge_uniqgenes$pval < 0.05 & SexAge_uniqgenes$log2FoldChange >= 1, 'red',
+        'gray'))
+
+keyvals.colourSA[is.na(keyvals.colourSA)] <- 'gray'
+names(keyvals.colourSA)[keyvals.colourSA == 'blue'] <- 'Up'
+names(keyvals.colourSA)[keyvals.colourSA == 'gray'] <- 'Mid'
+names(keyvals.colourSA)[keyvals.colourSA == 'red'] <- 'Down'
+
+EnhancedVolcano(SexAge_uniqgenes,
+    lab = SexAge_uniqgenes$genetags,
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    selectLab = SexAge_uniqgenes$external_gene_name[which(names(keyvalsSA) %in% c('Highest', 'Lowest'))],
+    title = "DE by Sex & Age",
+  subtitle = bquote(italic("Young females vs Older males")),
+  pCutoff = 0.05,
+    FCcutoff = 1,
+  pointSize = c(ifelse((SexAge_uniqgenes$padj<0.05 & 
+                          (SexAge_uniqgenes$log2FoldChange >= 1 | SexAge_uniqgenes$log2FoldChange <= -1)),3, 0.5)),
+    labSize = 2.5,
+  #col=c('gray2', 'green2', 'blue2', 'red'),
+  shapeCustom = keyvals.shapeSA,
+  colCustom = keyvals.colourSA,
+  #shape = c(1, 4, 23, 25),
+    colAlpha = 0.5,
+    shadeAlpha = 1/2,
+    cutoffLineType = 'twodash',
+    cutoffLineCol = 'black',
+    cutoffLineWidth = 0.8,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+  legendLabels=c('Not sig.','Log (base 2) FC','p-value',
+      'p-value & Log (base 2) FC'),
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+  drawConnectors = TRUE,
+  arrowheads = FALSE,
+    endsConnectors = "first",
+   widthConnectors = 0.25,
+      boxedLabels = TRUE,
+  max.overlaps = 0,
+  maxoverlapsConnectors = Inf
+  )
+
+```
+
+```{r DE and EVolcano for clusters}
+
+clustering3 <- read.delim("spl152_nmfconsensus.k.3.txt")
+
+#cambiar nombre de columna
+clustering3 <- clustering3 %>% rename("Names" = "Name")
+clustering3 <- clustering3 %>% rename("Cluster" = "membership.ordered")
+
+Neu3Clusters <- left_join(Metadata152, clustering3, by="Names")
+
+Neu3Clusters$Cluster <- as.factor(Neu3Clusters$Cluster)
+
+Neu3Clusters$Cluster1 <- ""
+Neu3Clusters$Cluster1[Neu3Clusters$Cluster == 1] <- "1"
+Neu3Clusters$Cluster1[!Neu3Clusters$Cluster == 1] <- "0"
+
+Neu3Clusters$Cluster2 <- ""
+Neu3Clusters$Cluster2[Neu3Clusters$Cluster == 2] <- "1"
+Neu3Clusters$Cluster2[!Neu3Clusters$Cluster == 2] <- "0"
+
+Neu3Clusters$Cluster3 <- ""
+Neu3Clusters$Cluster3[Neu3Clusters$Cluster == 3] <- "1"
+Neu3Clusters$Cluster3[!Neu3Clusters$Cluster == 3] <- "0"
+
+Neu3Clusters$Cluster1 <- as.factor(Neu3Clusters$Cluster1)
+Neu3Clusters$Cluster2 <- as.factor(Neu3Clusters$Cluster2)
+Neu3Clusters$Cluster3 <- as.factor(Neu3Clusters$Cluster3)
+
+ddsCluster1 <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Neu3Clusters,
+                              design = ~ Cluster1)
+ddsCluster1
+keepCluster1 <- rowSums(counts(ddsCluster1)) >= 10
+ddsCluster1 <- ddsCluster1[keepCluster1,]
+ddsCluster1 <- DESeq(ddsCluster1)
+
+ddsCluster2 <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Neu3Clusters,
+                              design = ~ Cluster2)
+ddsCluster2
+keepCluster2 <- rowSums(counts(ddsCluster2)) >= 10
+ddsCluster2 <- ddsCluster2[keepCluster2,]
+ddsCluster2 <- DESeq(ddsCluster2)
+
+ddsCluster3 <- DESeqDataSetFromMatrix(countData = Neu152,
+                              colData = Neu3Clusters,
+                              design = ~ Cluster3)
+ddsCluster3
+keepCluster3 <- rowSums(counts(ddsCluster3)) >= 10
+ddsCluster3 <- ddsCluster3[keepCluster3,]
+ddsCluster3 <- DESeq(ddsCluster3)
+
+
+#Expresion diferencial
+
+resultsNames(ddsCluster1)
+resultsNames(ddsCluster2)
+resultsNames(ddsCluster3)
+
+Cluster1_res <-results(ddsCluster1, contrast=c("Cluster1","1","0"))
+Cluster2_res <-results(ddsCluster2, contrast=c("Cluster2","1","0"))
+Cluster3_res <-results(ddsCluster3, contrast=c("Cluster3","1","0"))
+
+save(Cluster1_res, file = "Cluster1res.RData")
+save(Cluster2_res, file = "Cluster2res.RData")
+save(Cluster3_res, file = "Cluster3res.RData")
+
+Cluster1_res_df <- as.data.frame(Cluster1_res)
+Cluster2_res_df <- as.data.frame(Cluster2_res)
+Cluster3_res_df <- as.data.frame(Cluster3_res)
+
+#en values usar la lista de Ensembl IDs que se quiere convertir
+Cluster1_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(Cluster1_res_df),
+              mart = ensembl.con)
+
+Cluster1_res_df<-rownames_to_column(Cluster1_res_df, var="ensembl_gene_id")
+Cluster1_res <- left_join(Cluster1_res_df,Cluster1_resGenes, by="ensembl_gene_id")
+
+Cluster2_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(Cluster2_res_df),
+              mart = ensembl.con)
+Cluster2_res_df<-rownames_to_column(Cluster2_res_df, var="ensembl_gene_id")
+Cluster2_res <- left_join(Cluster2_res_df,Cluster2_resGenes, by="ensembl_gene_id")
+
+Cluster3_resGenes <- getBM(attributes = c('ensembl_gene_id','external_gene_name', 'gene_biotype'),
+              filters = "ensembl_gene_id",
+              values = rownames(Cluster3_res_df),
+              mart = ensembl.con)
+Cluster3_res_df<-rownames_to_column(Cluster3_res_df, var="ensembl_gene_id")
+Cluster3_res <- left_join(Cluster3_res_df,Cluster3_resGenes, by="ensembl_gene_id")
+
+dim(Cluster1_res) #52998 genes
+dim(Cluster2_res) #52998 genes
+dim(Cluster3_res) #52998 genes
+
+Cluster1_res$gene_biotype <- as.factor(Cluster1_res$gene_biotype)
+Cluster1_res2 <- Cluster1_res[(Cluster1_res$gene_biotype == "protein_coding"), ]
+dim(Cluster1_res2) #21411 filas o genes codificantes
+Cluster1_res3 <- Cluster1_res2 %>% drop_na(c(padj, gene_biotype))
+dim(Cluster1_res3) #18530 genes con padj
+#remover duplicates y guardar uniques
+Cluster1_uniqgenes <- Cluster1_res3[!duplicated(Cluster1_res3$external_gene_name), ] #18424 unique genes
+rownames(Cluster1_uniqgenes) <- Cluster1_uniqgenes$external_gene_name
+
+Cluster2_res$gene_biotype <- as.factor(Cluster2_res$gene_biotype)
+Cluster2_res2 <- Cluster2_res[(Cluster2_res$gene_biotype == "protein_coding"), ]
+dim(Cluster2_res2) #21411 filas o genes codificantes
+Cluster2_res3 <- Cluster2_res2 %>% drop_na(c(padj, gene_biotype))
+dim(Cluster2_res3) #18530 genes con padj
+#remover duplicates y guardar uniques
+Cluster2_uniqgenes <- Cluster2_res3[!duplicated(Cluster2_res3$external_gene_name), ] #18652 unique genes
+rownames(Cluster2_uniqgenes) <- Cluster2_uniqgenes$external_gene_name
+
+Cluster3_res$gene_biotype <- as.factor(Cluster3_res$gene_biotype)
+Cluster3_res2 <- Cluster3_res[(Cluster3_res$gene_biotype == "protein_coding"), ]
+dim(Cluster3_res2) #21411 filas o genes codificantes
+Cluster3_res3 <- Cluster3_res2 %>% drop_na(c(padj, gene_biotype))
+dim(Cluster3_res3) #18530 genes con padj
+#remover duplicates y guardar uniques
+Cluster3_uniqgenes <- Cluster3_res3[!duplicated(Cluster3_res3$external_gene_name), ] #18645 unique genes
+rownames(Cluster3_uniqgenes) <- Cluster3_uniqgenes$external_gene_name
+
+save(Cluster1_uniqgenes, file = "Cluster1_uniqprotcodgenes.RData")
+save(Cluster2_uniqgenes, file = "Cluster3_uniqprotcodgenes.RData")
+save(Cluster3_uniqgenes, file = "Cluster3_uniqprotcodgenes.RData")
+
+#clasificar genes significativos por padj
+Cluster1_uniqgenes$diffexpressed <- ""
+Cluster1_uniqgenes$diffexpressed[Cluster1_uniqgenes$log2FoldChange >= 1 & Cluster1_uniqgenes$padj < 0.05] <- "UP"
+Cluster1_uniqgenes$diffexpressed[Cluster1_uniqgenes$log2FoldChange <= -1 & Cluster1_uniqgenes$padj < 0.05] <- "DOWN"
+Cluster1_onlyDEGs <- Cluster1_uniqgenes[!(Cluster1_uniqgenes$diffexpressed == ""), ] #6225 DEGs
+
+Cluster2_uniqgenes$diffexpressed <- ""
+Cluster2_uniqgenes$diffexpressed[Cluster2_uniqgenes$log2FoldChange >= 1 & Cluster2_uniqgenes$padj < 0.05] <- "UP"
+Cluster2_uniqgenes$diffexpressed[Cluster2_uniqgenes$log2FoldChange <= -1 & Cluster2_uniqgenes$padj < 0.05] <- "DOWN"
+Cluster2_onlyDEGs <- Cluster2_uniqgenes[!(Cluster2_uniqgenes$diffexpressed == ""), ] #3656 DEGs
+
+Cluster3_uniqgenes$diffexpressed <- ""
+Cluster3_uniqgenes$diffexpressed[Cluster3_uniqgenes$log2FoldChange >= 1 & Cluster3_uniqgenes$padj < 0.05] <- "UP"
+Cluster3_uniqgenes$diffexpressed[Cluster3_uniqgenes$log2FoldChange <= -1 & Cluster3_uniqgenes$padj < 0.05] <- "DOWN"
+Cluster3_onlyDEGs <- Cluster3_uniqgenes[!(Cluster3_uniqgenes$diffexpressed == ""), ] #5465 DEGs
+
+# UP-regulated genes
+Cluster1_upGenes <- subset(Cluster1_onlyDEGs, log2FoldChange >= 1)
+rownames(Cluster1_upGenes) <- Cluster1_upGenes$ensembl_gene_id
+Cluster1_upGenes_names <- rownames(as.data.frame(Cluster1_upGenes))
+length(Cluster1_upGenes_names) #877
+write.table(Cluster1_upGenes,file ="./Cluster1_upGenes.tsv", quote=FALSE, sep="\t")
+
+Cluster2_upGenes <- subset(Cluster2_onlyDEGs, log2FoldChange >= 1)
+rownames(Cluster2_upGenes) <- Cluster2_upGenes$ensembl_gene_id
+Cluster2_upGenes_names <- rownames(as.data.frame(Cluster2_upGenes))
+length(Cluster2_upGenes_names) #1209
+write.table(Cluster2_upGenes,file ="./Cluster2_upGenes.tsv", quote=FALSE, sep="\t")
+
+Cluster3_upGenes <- subset(Cluster3_onlyDEGs, log2FoldChange >= 1)
+rownames(Cluster3_upGenes) <- Cluster3_upGenes$ensembl_gene_id
+Cluster3_upGenes_names <- rownames(as.data.frame(Cluster3_upGenes))
+length(Cluster3_upGenes_names) #751
+write.table(Cluster3_upGenes,file ="./Cluster3_upGenes.tsv", quote=FALSE, sep="\t")
+
+
+Clusterbar <- as.data.frame(Neu3Clusters$Cluster)
+colorCluster=c("blue3","blue4","magenta4")
+
+Clusterbar %>% 
+  ggplot(aes(x = `Neu3Clusters$Cluster`)) +
+geom_bar(color="white", fill=colorCluster) +
+  theme(legend.position="none") +
+  stat_count(geom = "text", 
+             aes(label = stat(count)),
+             position=position_fill(vjust=2),
+             colour="black")+
+  labs(y = " ", x= "Clusters")
+
+```
