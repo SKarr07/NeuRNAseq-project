@@ -12,7 +12,7 @@ Forma de citar en APA, DOI: URL
 
 Pasos a seguir para el análisis de los datos de RNA-Seq
 
-1) Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
+**Step 1**. Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
 
 2) Importar datos en R (archivo de cuentas) + metadatos y 3) Crear una matriz de cuentas con todos los transcriptomas - `Script load_data_inR.R`
 
