@@ -31,7 +31,14 @@ Pasos a seguir para el análisis de los datos de RNA-Seq
 `Script GOterms_analysis.R`:
 
 9) Análisis de Terminos funcionales (GO terms)
-    
+
+## Contact
+
+correos, tu escuela
+redes sociales
+
+
+------------------
 
 ## RNA-seq analysis workflow
 
