@@ -12,25 +12,15 @@ Forma de citar en APA, DOI: URL
 
 Pasos a seguir para el análisis de los datos de RNA-Seq
 
-- [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md):
+1) Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
 
-    1) Download public data
+2) Importar datos en R (archivo de cuentas) + metadatos y 3) Crear una matriz de cuentas con todos los transcriptomas - `Script load_data_inR.R`
 
-- `Script load_data_inR.R`:
+3) Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), 5) Normalización de los datos, 6) Detección de batch effect y 7) Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
 
-     2) Importar datos en R (archivo de cuentas) + metadatos y 3) Crear una matriz de cuentas con todos los transcriptomas
+8) Visualización de los datos - `Script VisualizacionDatos.R`
 
-`Script DEG_analysis.R`:
-
-3) Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), 5) Normalización de los datos, 6) Detección de batch effect y 7) Obtener los resultados de los contraste de DEG
-
-`Script VisualizacionDatos.R`:
-
-8) Visualización de los datos
-
-`Script GOterms_analysis.R`:
-
-9) Análisis de Terminos funcionales (GO terms)
+9) Análisis de Terminos funcionales (GO terms) - `Script GOterms_analysis.R`
 
 ## Contact
 
