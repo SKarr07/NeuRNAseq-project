@@ -22,8 +22,8 @@ Pasos a seguir para el análisis de los datos de RNA-Seq
 
 **Step 5**. Visualización de los datos (PCA, heatmap)- `Script VisualizacionDatos.R`
 
-    - PCA.R
-    - Figure1_Heatmap.R
+    - `PCA.R`
+    - `Figure1_Heatmap.R`
 
 **Step 6**.Análisis de Terminos funcionales (GO terms) - `Script GOterms_analysis.R`
 
