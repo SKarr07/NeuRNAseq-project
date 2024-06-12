@@ -21,6 +21,7 @@ Pasos a seguir para el análisis de los datos de RNA-Seq
 **Step 4**. Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), Normalización de los datos, Detección de batch effect y  Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
 
 **Step 5**. Visualización de los datos (PCA, heatmap)- `Script VisualizacionDatos.R`
+
     - PCA.R
     - Figure1_Heatmap.R
 
