@@ -12,22 +12,20 @@ Forma de citar en APA, DOI: URL
 
 Pasos a seguir para el análisis de los datos de RNA-Seq
 
-**Step 1**. Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
+- **Step 1**. Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
 
-**Step 2**. Aligment and count of reads
+- **Step 2**. Aligment and count of reads
 
-**Step 3**.Importar datos en R (archivo de cuentas) + metadatos y Crear una matriz de cuentas con todos los transcriptomas - `Script load_data_inR.R`
+- **Step 3**.Importar datos en R (archivo de cuentas) + metadatos y Crear una matriz de cuentas con todos los transcriptomas - `Script load_data_inR.R`
 
-**Step 4**. Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), Normalización de los datos, Detección de batch effect y  Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
+- **Step 4**. Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), Normalización de los datos, Detección de batch effect y  Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
 
-**Step 5**. Visualización de los datos (PCA, heatmap)- `Script VisualizacionDatos.R`
-
--
+- **Step 5**. Visualización de los datos (PCA, heatmap)- `Script VisualizacionDatos.R`
+  
     - Figure1_Heatmap.R
     - PCA.R
  
-      
-**Step 6**.Análisis de Terminos funcionales (GO terms) - `Script GOterms_analysis.R`
+- **Step 6**.Análisis de Terminos funcionales (GO terms) - `Script GOterms_analysis.R`
 
 ## Contact
 
