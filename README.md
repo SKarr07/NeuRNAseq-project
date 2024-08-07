@@ -1,22 +1,18 @@
-# Transcriptional heterogeneity of neutrophils in steady state: a meta-analysis (revista y autores)
+# Transcriptional heterogeneity of neutrophils in steady state: a meta-analysis (Journal and authors)
 
-## Descripcion 
-Habiendo seleccionado las muestras bajo los impuestos criterios de inclusión, proceder al análisis de los datos de secuenciación.
+## Description 
+Works containing samples that followed all the inclusion criteria were selected to proceed with rawdata downloading, processing and analysis.
 
 ## Citing
-
-Forma de citar en APA, DOI: URL
-
+APA format citing and DOI: URL.
 
 ## Pipeline
 
-Pasos a seguir para el análisis de los datos de RNA-Seq
-
 - **Step 1**. Download public data: - [`Download_Data.md`](https://github.com/SKarr07/NeuRNAseq-project/blob/main/Download_Data.md)
 
-- **Step 2**. Aligment and count of reads
+- **Step 2**. Alignment and gene counts generation. 
 
-- **Step 3**.Importar datos en R (archivo de cuentas) + metadatos y Crear una matriz de cuentas con todos los transcriptomas - `Script load_data_inR.R`
+- **Step 3**. Import data from R (gene counts file) + Metadata. Create a count matrix with all the transcriptomic samples. - `Script load_data_inR.R`
 
 - **Step 4**. Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), Normalización de los datos, Detección de batch effect y  Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
 
