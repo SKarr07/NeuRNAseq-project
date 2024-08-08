@@ -1,10 +1,10 @@
-# Transcriptional heterogeneity of neutrophils in steady state: a meta-analysis (Journal and authors)
+# Transcriptional heterogeneity of neutrophils in steady state: a meta-analysis (add Journal and authors)
 
 ## Description 
 Works containing samples that followed all the inclusion criteria were selected to proceed with rawdata downloading, processing and analysis.
 
 ## Citing
-APA format citing and DOI: URL.
+Add APA format citing and DOI: URL.
 
 ## Pipeline
 
