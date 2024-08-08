@@ -14,19 +14,20 @@ Add APA format citing and DOI: URL.
 
 - **Step 3**. Import data from R (gene counts file) + Metadata. Create a count matrix with all the transcriptomic samples. - `Script load_data_inR.R`
 
-- **Step 4**. Crear el archivo dds con DESeq2, 4) Correr el análisis de Expresión Diferencial de los Genes (DEG), Normalización de los datos, Detección de batch effect y  Obtener los resultados de los contraste de DEG - `Script DEG_analysis.R`
+- **Step 4**. Create dds file using DESeq2, run differential expression analysis, data normalization, batch effect correction and contrast conditions - `Script DEG_analysis.R`
 
-- **Step 5**. Visualización de los datos (PCA, heatmap)- `Script VisualizacionDatos.R`
+- **Step 5**. Data visualization (PCA, heatmap)- `Script VisualizacionDatos.R`
   
-    - Figure1_Heatmap.R
-    - PCA.R
+    - Figures 1-6.
+    - Supplementary Figures.
  
 - **Step 6**.Análisis de Terminos funcionales (GO terms) - `Script GOterms_analysis.R`
 
 ## Contact
 
-correos, tu escuela
-redes sociales
+Corresponding mail.
+Affiliation.
+Social networks.
 
 
 ------------------
